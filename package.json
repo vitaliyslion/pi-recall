@@ -1,8 +1,23 @@
 {
   "name": "pi-recall",
   "version": "0.1.0",
-  "private": true,
   "description": "Pi extension: capture full bash output, index it (Orama BM25), and show the model a compact recall stub — reversible compaction.",
+  "homepage": "https://github.com/vitaliyslion/pi-recall#readme",
+  "bugs": {
+    "url": "https://github.com/vitaliyslion/pi-recall/issues"
+  },
+  "license": "MIT",
+  "author": "Vitalii Pedchenko <vitaliyslion@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitaliyslion/pi-recall.git"
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
   "main": "index.js",
   "scripts": {

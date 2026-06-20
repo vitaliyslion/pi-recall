@@ -31,15 +31,17 @@ library.
 
 ## Install
 
-A directory extension loads its entry from the extension root, so the source files in `src/` go
-**directly into the extension dir** (not under a nested `src/`), alongside `package.json`.
+A directory extension loads its entry (`index.js`) from the extension root; that entry re-exports
+`./src/index.js`, so the package is copied with its structure intact (`index.js` + `src/` +
+`package.json`).
 
 **Per-project** (loads only inside one repo; the repo must be trusted in Pi):
 
 ```bash
 DEST=/path/to/your-project/.pi/extensions/pi-recall
 mkdir -p "$DEST"
-cp src/*.js package.json "$DEST/"
+cp index.js package.json "$DEST/"
+cp -r src "$DEST/"
 cd "$DEST" && npm install --omit=dev
 ```
 
@@ -48,7 +50,8 @@ cd "$DEST" && npm install --omit=dev
 ```bash
 DEST=~/.pi/agent/extensions/pi-recall
 mkdir -p "$DEST"
-cp src/*.js package.json "$DEST/"
+cp index.js package.json "$DEST/"
+cp -r src "$DEST/"
 cd "$DEST" && npm install --omit=dev
 ```
 
@@ -61,8 +64,11 @@ pi -e /path/to/pi-recall/src/index.js
 
 Verify it loaded with `/recall-status` inside Pi (below).
 
-<!-- TODO: add an `install.sh` that flattens src/* + package.json into the chosen dest and runs
-     `npm install --omit=dev` — handy, but not a priority right now. -->
+Or use the helper, which does the per-project steps above for a given project dir:
+
+```bash
+scripts/install.sh /path/to/your-project
+```
 
 - `/recall-status` — print effective config + index stats.
 - `--recall-off` — disable capture for a run (pass all bash output through untouched).
