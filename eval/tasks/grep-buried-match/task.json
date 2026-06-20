@@ -1,0 +1,7 @@
+{
+  "id": "grep-buried-match",
+  "prompt": "Run this command exactly: `bash fixture.sh`. It is a repository-wide search result. Using only its output, tell me which file and line contains the FIXME about payment timeout, and what it says. Answer in one line.",
+  "fixtureCmd": "bash fixture.sh",
+  "expect": { "pattern": "FIXME_PAYMENT_TIMEOUT set to 0 disables retries" },
+  "notes": "Single real match buried at line 250/2500 (~160 KB); rest is TODO noise. Head is dropped by Pi tail-truncation."
+}

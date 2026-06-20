@@ -1,0 +1,31 @@
+{
+  "name": "pi-recall",
+  "version": "0.1.0",
+  "description": "Pi extension: capture full bash output, index it (Orama BM25), and show the model a compact recall stub — reversible compaction.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "main": "index.js",
+  "pi": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "scripts": {
+    "check": "node --check src/index.js && node --check src/store.js && node --check src/stub.js && node --check src/config.js",
+    "smoke": "node test/smoke.js"
+  },
+  "dependencies": {
+    "@orama/orama": "^3.1.18",
+    "@orama/plugin-data-persistence": "^3.1.18",
+    "typebox": "^1.1.38"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.79.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.79.4"
+  }
+}

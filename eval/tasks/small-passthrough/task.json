@@ -1,0 +1,7 @@
+{
+  "id": "small-passthrough",
+  "prompt": "Run this command exactly: `bash fixture.sh`. Using only its output, tell me the build id. Answer in one line.",
+  "fixtureCmd": "bash fixture.sh",
+  "expect": { "pattern": "7f3a9c2" },
+  "notes": "Negative control. Output is below pi-recall's gate, so C must NOT capture (assert captured=false and bash-result chars ~= full output). Accuracy should be true for both A and C."
+}

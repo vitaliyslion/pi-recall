@@ -1,0 +1,7 @@
+{
+  "id": "test-failure-buried",
+  "prompt": "Run this command exactly: `bash fixture.sh`. It is a test run. Using only its output, tell me the name of the single test that FAILED and the expected vs actual value. Answer in one line.",
+  "fixtureCmd": "bash fixture.sh",
+  "expect": { "pattern": "test_payment_refund_rounding.*expected 19.99 got 20.00" },
+  "notes": "One failing test at line 400/4000 (~170 KB), buried in the dropped head; the kept tail only shows passing lines + summary count."
+}
