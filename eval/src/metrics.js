@@ -11,8 +11,12 @@
 const FULLOUTPUT_PATH_RE = /fulloutput|pi-bash|\/tmp\/|tmpdir|\.pi[\\/]/i;
 
 function textOf(content) {
-  if (!Array.isArray(content)) return typeof content === "string" ? content : "";
-  return content.filter((c) => c?.type === "text").map((c) => c.text).join("");
+  if (!Array.isArray(content))
+    return typeof content === "string" ? content : "";
+  return content
+    .filter((c) => c?.type === "text")
+    .map((c) => c.text)
+    .join("");
 }
 
 /** Analyze a finished session's messages into behavioral metrics. */
@@ -39,7 +43,12 @@ export function analyzeMessages(messages, { stubMarker = "pi-recall" } = {}) {
         else if (c.name === "recall") recallCalls++;
         else if (c.name === "read") {
           readCalls++;
-          const p = String(c.arguments?.path ?? c.arguments?.file ?? c.arguments?.file_path ?? "");
+          const p = String(
+            c.arguments?.path ??
+              c.arguments?.file ??
+              c.arguments?.file_path ??
+              "",
+          );
           if (FULLOUTPUT_PATH_RE.test(p)) rereadFullOutput = true;
         }
       }
@@ -50,7 +59,16 @@ export function analyzeMessages(messages, { stubMarker = "pi-recall" } = {}) {
     }
   }
 
-  return { bashCalls, recallCalls, readCalls, rereadFullOutput, bashResultChars, captured, finalAnswer, apiError };
+  return {
+    bashCalls,
+    recallCalls,
+    readCalls,
+    rereadFullOutput,
+    bashResultChars,
+    captured,
+    finalAnswer,
+    apiError,
+  };
 }
 
 /** Programmatic accuracy check against task.expect ({pattern} regex or {substring}). */
@@ -58,6 +76,7 @@ export function checkAccuracy(answer, expect) {
   if (!expect) return null;
   const a = answer ?? "";
   if (expect.pattern) return new RegExp(expect.pattern, "i").test(a);
-  if (expect.substring) return a.toLowerCase().includes(String(expect.substring).toLowerCase());
+  if (expect.substring)
+    return a.toLowerCase().includes(String(expect.substring).toLowerCase());
   return null;
 }

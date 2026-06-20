@@ -39,7 +39,8 @@ export const DEFAULT_CONFIG = {
   tailLines: 40,
   stubTerms: 12,
   stubHighlights: 3,
-  highlightPattern: "error|warn|fail|exception|fatal|panic|traceback|denied|timeout|✗",
+  highlightPattern:
+    "error|warn|fail|exception|fatal|panic|traceback|denied|timeout|✗",
 };
 
 const KNOWN_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
@@ -50,7 +51,9 @@ function readJsonIfExists(path, warn) {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch (e) {
-    warn?.(`pi-recall: ignoring invalid config ${path}: ${e instanceof Error ? e.message : e}`);
+    warn?.(
+      `pi-recall: ignoring invalid config ${path}: ${e instanceof Error ? e.message : e}`,
+    );
     return {};
   }
 }
@@ -71,7 +74,10 @@ function mergeKnown(base, overrides) {
  * @returns {RecallConfig}
  */
 export function loadConfig(cwd, warn) {
-  const global = readJsonIfExists(join(getAgentDir(), "extensions", "pi-recall.json"), warn);
+  const global = readJsonIfExists(
+    join(getAgentDir(), "extensions", "pi-recall.json"),
+    warn,
+  );
   const project = readJsonIfExists(join(cwd, ".pi", "pi-recall.json"), warn);
   return mergeKnown(mergeKnown(DEFAULT_CONFIG, global), project);
 }

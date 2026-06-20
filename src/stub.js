@@ -4,6 +4,7 @@
 //   3. Terms       — copy-paste-searchable tokens (via Orama's own tokenizer) + the recall affordance.
 // All three are computed from the full text we already hold at capture; none needs the model.
 
+// prettier-ignore
 const STOPWORDS = new Set([
   "the", "and", "for", "are", "but", "not", "you", "all", "any", "can", "had", "her", "was", "one",
   "our", "out", "day", "get", "has", "him", "his", "how", "man", "new", "now", "old", "see", "two",
@@ -43,7 +44,10 @@ function notableLines(full, pattern, max) {
     const line = lines[i];
     if (re.test(line)) {
       const trimmed = line.trim().replace(/\s+/g, " ");
-      out.push({ lineNo: i, text: trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed });
+      out.push({
+        lineNo: i,
+        text: trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed,
+      });
     }
   }
   return out;

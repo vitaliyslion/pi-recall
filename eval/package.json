@@ -1,12 +1,9 @@
 {
   "name": "pi-recall-eval",
   "version": "0.1.0",
+  "private": true,
   "description": "Evaluation harness for pi-recall (SPEC §7): compares native Pi (A) vs pi-recall (C) on buried-answer tasks.",
   "type": "module",
-  "private": true,
-  "engines": {
-    "node": ">=22.19.0"
-  },
   "scripts": {
     "run": "node src/run.js",
     "mine": "node src/mine.js"
@@ -14,5 +11,8 @@
   "dependencies": {
     "@earendil-works/pi-ai": "^0.79.4",
     "@earendil-works/pi-coding-agent": "^0.79.4"
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }

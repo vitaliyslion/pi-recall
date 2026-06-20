@@ -6,7 +6,10 @@
 //   - file persistence lives in @orama/plugin-data-persistence/server (the bare entry is in-memory).
 
 import { create, insertMultiple, search, count } from "@orama/orama";
-import { persistToFile, restoreFromFile } from "@orama/plugin-data-persistence/server";
+import {
+  persistToFile,
+  restoreFromFile,
+} from "@orama/plugin-data-persistence/server";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -65,7 +68,11 @@ export class RecallStore {
     const step = Math.max(1, this.cfg.chunkLines);
     const docs = [];
     for (let i = 0; i < lines.length; i += step) {
-      docs.push({ text: lines.slice(i, i + step).join("\n"), source, startLine: i });
+      docs.push({
+        text: lines.slice(i, i + step).join("\n"),
+        source,
+        startLine: i,
+      });
     }
     await insertMultiple(this.db, docs);
     this.commands.set(source, command);

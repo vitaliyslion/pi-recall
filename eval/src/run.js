@@ -20,12 +20,23 @@ const RESULTS_DIR = join(EVAL_ROOT, "results");
 const DEFAULT_EXT = join(EVAL_ROOT, "..", "src", "index.js"); // pi-recall extension (when built)
 
 function parseArgs(argv) {
-  const out = { tasks: "all", conditions: ["A", "C"], trials: 3, model: null, ext: DEFAULT_EXT, outFile: null };
+  const out = {
+    tasks: "all",
+    conditions: ["A", "C"],
+    trials: 3,
+    model: null,
+    ext: DEFAULT_EXT,
+    outFile: null,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
     if (a === "--tasks") out.tasks = next();
-    else if (a === "--conditions") out.conditions = next().split(",").map((s) => s.trim()).filter(Boolean);
+    else if (a === "--conditions")
+      out.conditions = next()
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
     else if (a === "--trials") out.trials = Number(next());
     else if (a === "--model") out.model = next();
     else if (a === "--ext") out.ext = next();
@@ -38,7 +49,8 @@ function parseArgs(argv) {
 async function loadTasks(filter) {
   const entries = await readdir(TASKS_DIR, { withFileTypes: true });
   const ids = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  const want = filter === "all" ? null : new Set(filter.split(",").map((s) => s.trim()));
+  const want =
+    filter === "all" ? null : new Set(filter.split(",").map((s) => s.trim()));
   const tasks = [];
   for (const id of ids) {
     if (want && !want.has(id)) continue;
@@ -52,7 +64,8 @@ async function loadTasks(filter) {
 async function resolveModel(spec) {
   if (!spec) return undefined; // SDK uses settings default
   const slash = spec.indexOf("/");
-  if (slash < 0) throw new Error(`--model must be "provider/id", got "${spec}"`);
+  if (slash < 0)
+    throw new Error(`--model must be "provider/id", got "${spec}"`);
   const provider = spec.slice(0, slash);
   const id = spec.slice(slash + 1);
   const { getModel } = await import("@earendil-works/pi-ai");
@@ -62,7 +75,9 @@ async function resolveModel(spec) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    console.log("Usage: node src/run.js [--tasks all|id,..] [--conditions A,C] [--trials N] [--model provider/id] [--ext path] [--out file]");
+    console.log(
+      "Usage: node src/run.js [--tasks all|id,..] [--conditions A,C] [--trials N] [--model provider/id] [--ext path] [--out file]",
+    );
     return;
   }
 
@@ -73,7 +88,9 @@ async function main() {
   }
   const model = await resolveModel(args.model);
 
-  console.log(`pi-recall eval — ${tasks.length} task(s), conditions [${args.conditions.join(", ")}], ${args.trials} trial(s) each`);
+  console.log(
+    `pi-recall eval — ${tasks.length} task(s), conditions [${args.conditions.join(", ")}], ${args.trials} trial(s) each`,
+  );
   console.log(`model: ${args.model ?? "(settings default)"}`);
 
   // Resolve conditions once (this is where C is skipped if the extension isn't built).
@@ -101,11 +118,21 @@ async function main() {
     for (const cond of activeConditions) {
       const trials = [];
       for (let t = 0; t < args.trials; t++) {
-        process.stdout.write(`  ${id} [${cond}] trial ${t + 1}/${args.trials} ... `);
-        const rec = await runTrial({ task, taskDir, condition: cond, factories: condFactories[cond], model });
+        process.stdout.write(
+          `  ${id} [${cond}] trial ${t + 1}/${args.trials} ... `,
+        );
+        const rec = await runTrial({
+          task,
+          taskDir,
+          condition: cond,
+          factories: condFactories[cond],
+          model,
+        });
         trials.push(rec);
         rawTrials.push({ taskId: id, condition: cond, trial: t, ...rec });
-        console.log(`${rec.ok ? (rec.accurate ? "OK accurate" : "OK miss") : "ERROR"}${cond === "C" ? ` (recall:${rec.recallCalls}, capt:${rec.captured})` : ""}`);
+        console.log(
+          `${rec.ok ? (rec.accurate ? "OK accurate" : "OK miss") : "ERROR"}${cond === "C" ? ` (recall:${rec.recallCalls}, capt:${rec.captured})` : ""}`,
+        );
       }
       results[id][cond] = aggregate(trials);
     }
@@ -114,8 +141,13 @@ async function main() {
   printReport(results, activeConditions);
 
   await mkdir(RESULTS_DIR, { recursive: true });
-  const outFile = args.outFile ?? join(RESULTS_DIR, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  await writeFile(outFile, JSON.stringify({ args: { ...args }, results, rawTrials }, null, 2));
+  const outFile =
+    args.outFile ??
+    join(RESULTS_DIR, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+  await writeFile(
+    outFile,
+    JSON.stringify({ args: { ...args }, results, rawTrials }, null, 2),
+  );
   console.log(`raw results -> ${outFile}`);
   void stat;
 }

@@ -19,7 +19,8 @@ import { computeTail, formatStub } from "./stub.js";
 
 /** TextContent parts joined; ImageContent ignored for sizing/indexing (passed through untouched). */
 function textOf(content) {
-  if (!Array.isArray(content)) return typeof content === "string" ? content : "";
+  if (!Array.isArray(content))
+    return typeof content === "string" ? content : "";
   return content
     .filter((c) => c && c.type === "text" && typeof c.text === "string")
     .map((c) => c.text)
@@ -48,7 +49,8 @@ const PI_FOOTER_PATH = /\[Showing [^\]\n]*Full output: ([^\]\n]+)\]/;
 // Anything Pi appended AFTER the footer in the inline content — on a failed command this is the status
 // line ("Command exited with code N", "Command aborted", "Command timed out after N seconds"). The
 // temp file has no such line, so we re-attach it when we read the complete output from the temp file.
-const PI_FOOTER_TRAILER = /\[Showing [^\]\n]*Full output: [^\]\n]*\]\s*([\s\S]*)$/;
+const PI_FOOTER_TRAILER =
+  /\[Showing [^\]\n]*Full output: [^\]\n]*\]\s*([\s\S]*)$/;
 function stripPiFooter(text) {
   return text.replace(PI_FOOTER_STRIP, "");
 }
@@ -71,7 +73,8 @@ export default function piRecall(pi) {
   let active = false; // effective enabled = config.enabled && !--recall-off
 
   pi.registerFlag("recall-off", {
-    description: "Disable pi-recall capture; pass all bash output through untouched",
+    description:
+      "Disable pi-recall capture; pass all bash output through untouched",
     type: "boolean",
     default: false,
   });
@@ -84,7 +87,10 @@ export default function piRecall(pi) {
 
     store = new RecallStore(cfg);
     if (!active) {
-      ctx.ui.setStatus("pi-recall", off ? "pi-recall: off (--recall-off)" : "pi-recall: off");
+      ctx.ui.setStatus(
+        "pi-recall",
+        off ? "pi-recall: off (--recall-off)" : "pi-recall: off",
+      );
       return;
     }
 
@@ -92,12 +98,23 @@ export default function piRecall(pi) {
       const sessionId = ctx.sessionManager.getSessionId();
       const restored = await store.restore(sessionId);
       const evicted = await store.evictStale();
-      if (restored) ctx.ui.notify("pi-recall: restored prior session index", "info");
-      if (evicted) ctx.ui.notify(`pi-recall: evicted ${evicted} stale snapshot(s)`, "info");
+      if (restored)
+        ctx.ui.notify("pi-recall: restored prior session index", "info");
+      if (evicted)
+        ctx.ui.notify(
+          `pi-recall: evicted ${evicted} stale snapshot(s)`,
+          "info",
+        );
     } catch (e) {
-      ctx.ui.notify(`pi-recall: index restore failed (${e instanceof Error ? e.message : e})`, "warning");
+      ctx.ui.notify(
+        `pi-recall: index restore failed (${e instanceof Error ? e.message : e})`,
+        "warning",
+      );
     }
-    ctx.ui.setStatus("pi-recall", `pi-recall: on (>${cfg.maxLines}ln/${Math.round(cfg.maxBytes / 1024)}KB)`);
+    ctx.ui.setStatus(
+      "pi-recall",
+      `pi-recall: on (>${cfg.maxLines}ln/${Math.round(cfg.maxBytes / 1024)}KB)`,
+    );
   });
 
   pi.on("session_shutdown", async () => {
@@ -139,7 +156,8 @@ export default function piRecall(pi) {
     if (!overGate(full, cfg)) return; // below our gate → pass through unchanged
 
     const source = `exec:${event.toolCallId}`;
-    const command = typeof event.input?.command === "string" ? event.input.command : "";
+    const command =
+      typeof event.input?.command === "string" ? event.input.command : "";
 
     try {
       await store.add(source, full, command);
@@ -164,23 +182,36 @@ export default function piRecall(pi) {
     description:
       "Search the full, un-truncated output of an earlier bash command (BM25). When a bash result " +
       "was replaced by a 'pi-recall' stub, use this to retrieve buried lines instead of re-running " +
-      "the command. Pass the stub's source id (e.g. \"exec:7f3a\") to scope to that one output.",
-    promptSnippet: "recall(query, source?) — search full output of a captured bash result (BM25)",
+      'the command. Pass the stub\'s source id (e.g. "exec:7f3a") to scope to that one output.',
+    promptSnippet:
+      "recall(query, source?) — search full output of a captured bash result (BM25)",
     promptGuidelines: [
       "When a bash result shows a 'pi-recall' stub, prefer recall(query, source) over re-running the command to find buried output.",
-      "Scope to one capture by passing its source id from the stub (e.g. source=\"exec:7f3a\").",
+      'Scope to one capture by passing its source id from the stub (e.g. source="exec:7f3a").',
     ],
     parameters: Type.Object({
-      query: Type.String({ description: "BM25 search terms (use the stub's 'Searchable terms')." }),
+      query: Type.String({
+        description: "BM25 search terms (use the stub's 'Searchable terms').",
+      }),
       source: Type.Optional(
-        Type.String({ description: 'Capture id e.g. "exec:<id>". Omit to search all captures.' }),
+        Type.String({
+          description:
+            'Capture id e.g. "exec:<id>". Omit to search all captures.',
+        }),
       ),
       limit: Type.Optional(Type.Number({ description: "Max hits to return." })),
     }),
     async execute(_toolCallId, { query, source, limit }) {
       const r = await store.search(query, source, limit);
       if (!r.hits.length) {
-        return { content: [{ type: "text", text: `(no matches for "${query}"${source ? ` in ${source}` : ""})` }] };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `(no matches for "${query}"${source ? ` in ${source}` : ""})`,
+            },
+          ],
+        };
       }
       const text = r.hits
         .map((h) => {

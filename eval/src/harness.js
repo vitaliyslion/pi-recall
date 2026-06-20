@@ -1,8 +1,18 @@
 // Drives a single (task, condition) trial: builds an isolated cwd, runs a headless Pi session under
 // the condition's extensions, and returns the per-trial metrics.
 
-import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { mkdtemp, mkdir, copyFile, writeFile, rm, chmod } from "node:fs/promises";
+import {
+  createAgentSession,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+import {
+  mkdtemp,
+  mkdir,
+  copyFile,
+  writeFile,
+  rm,
+  chmod,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeLoader, RECALL_PROJECT_CONFIG } from "./conditions.js";
@@ -30,7 +40,10 @@ export async function runTrial({ task, taskDir, condition, factories, model }) {
     await chmod(join(cwd, "fixture.sh"), 0o755);
     if (condition === "C") {
       await mkdir(join(cwd, ".pi"), { recursive: true });
-      await writeFile(join(cwd, ".pi", "pi-recall.json"), JSON.stringify(RECALL_PROJECT_CONFIG));
+      await writeFile(
+        join(cwd, ".pi", "pi-recall.json"),
+        JSON.stringify(RECALL_PROJECT_CONFIG),
+      );
     }
 
     const loader = makeLoader(cwd, factories);
@@ -64,8 +77,14 @@ export async function runTrial({ task, taskDir, condition, factories, model }) {
     }
 
     const messages = session.messages;
-    const stats = typeof session.getSessionStats === "function" ? session.getSessionStats() : null;
-    const ctx = typeof session.getContextUsage === "function" ? session.getContextUsage() : null;
+    const stats =
+      typeof session.getSessionStats === "function"
+        ? session.getSessionStats()
+        : null;
+    const ctx =
+      typeof session.getContextUsage === "function"
+        ? session.getContextUsage()
+        : null;
 
     unsub();
     session.dispose();

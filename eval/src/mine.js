@@ -50,9 +50,19 @@ async function* walkJsonl(dir) {
 }
 
 const textLen = (content) =>
-  Array.isArray(content) ? content.filter((c) => c?.type === "text").map((c) => c.text).join("").length : 0;
+  Array.isArray(content)
+    ? content
+        .filter((c) => c?.type === "text")
+        .map((c) => c.text)
+        .join("").length
+    : 0;
 const textOf = (content) =>
-  Array.isArray(content) ? content.filter((c) => c?.type === "text").map((c) => c.text).join("") : "";
+  Array.isArray(content)
+    ? content
+        .filter((c) => c?.type === "text")
+        .map((c) => c.text)
+        .join("")
+    : "";
 
 /** Pull candidate buried-output bash captures from one session file. */
 async function mineFile(file, minBytes) {
@@ -90,14 +100,19 @@ async function mineFile(file, minBytes) {
           sampleTail: textOf(m.content).slice(-400),
         });
       }
-    } else if (m.role === "bashExecution" && (m.truncated || (m.output?.length ?? 0) >= minBytes)) {
+    } else if (
+      m.role === "bashExecution" &&
+      (m.truncated || (m.output?.length ?? 0) >= minBytes)
+    ) {
       candidates.push({
         file,
         command: m.command ?? "(unknown command)",
         bytes: m.output?.length ?? 0,
         truncated: Boolean(m.truncated),
         fullOutputPath: m.fullOutputPath ?? null,
-        fullOutputExists: m.fullOutputPath ? existsSync(m.fullOutputPath) : false,
+        fullOutputExists: m.fullOutputPath
+          ? existsSync(m.fullOutputPath)
+          : false,
         sampleTail: (m.output ?? "").slice(-400),
       });
     }
@@ -107,7 +122,9 @@ async function mineFile(file, minBytes) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  console.log(`Mining sessions under ${args.sessions} (min ${args.minBytes} bytes)...`);
+  console.log(
+    `Mining sessions under ${args.sessions} (min ${args.minBytes} bytes)...`,
+  );
 
   const all = [];
   for await (const file of walkJsonl(args.sessions)) {
@@ -150,9 +167,13 @@ async function main() {
         2,
       ),
     );
-    console.log(`  candidate-${slug}: ${c.bytes} bytes, truncated=${c.truncated}  $ ${String(c.command).split("\n")[0].slice(0, 80)}`);
+    console.log(
+      `  candidate-${slug}: ${c.bytes} bytes, truncated=${c.truncated}  $ ${String(c.command).split("\n")[0].slice(0, 80)}`,
+    );
   }
-  console.log(`\n${picked.length} candidate(s) -> ${OUT_DIR} (review, then promote good ones into tasks/).`);
+  console.log(
+    `\n${picked.length} candidate(s) -> ${OUT_DIR} (review, then promote good ones into tasks/).`,
+  );
   void stat;
 }
 
