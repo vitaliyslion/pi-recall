@@ -11,7 +11,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import piRecall from "../src/index.js";
+import piRecall from "../src/index.ts";
 
 let failed = false;
 function check(name, cond, detail = "") {

@@ -11,23 +11,25 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-/** @typedef {{
- *   enabled: boolean,
- *   maxLines: number,
- *   maxBytes: number,
- *   persist: boolean,
- *   persistFormat: "json" | "binary" | "dpack",
- *   chunkLines: number,
- *   snapshotTtlDays: number,
- *   recallLimit: number,
- *   tailLines: number,
- *   stubTerms: number,
- *   stubHighlights: number,
- *   highlightPattern: string,
- * }} RecallConfig */
+/** Snapshot serialization format, passed through to @orama/plugin-data-persistence. */
+export type PersistFormat = "json" | "binary" | "dpack";
 
-/** @type {RecallConfig} */
-export const DEFAULT_CONFIG = {
+export interface RecallConfig {
+  enabled: boolean;
+  maxLines: number;
+  maxBytes: number;
+  persist: boolean;
+  persistFormat: PersistFormat;
+  chunkLines: number;
+  snapshotTtlDays: number;
+  recallLimit: number;
+  tailLines: number;
+  stubTerms: number;
+  stubHighlights: number;
+  highlightPattern: string;
+}
+
+export const DEFAULT_CONFIG: RecallConfig = {
   enabled: true,
   maxLines: 200,
   maxBytes: 5120,
@@ -43,13 +45,19 @@ export const DEFAULT_CONFIG = {
     "error|warn|fail|exception|fatal|panic|traceback|denied|timeout|✗",
 };
 
-const KNOWN_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
+const KNOWN_KEYS = new Set(
+  Object.keys(DEFAULT_CONFIG) as (keyof RecallConfig)[],
+);
 
-function readJsonIfExists(path, warn) {
+type Warn = (msg: string) => void;
+
+function readJsonIfExists(path: string, warn?: Warn): Record<string, unknown> {
   if (!existsSync(path)) return {};
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    return parsed && typeof parsed === "object" ? parsed : {};
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
   } catch (e) {
     warn?.(
       `pi-recall: ignoring invalid config ${path}: ${e instanceof Error ? e.message : e}`,
@@ -59,21 +67,22 @@ function readJsonIfExists(path, warn) {
 }
 
 /** Shallow merge of known config keys only (the config schema is flat — §6 table). */
-function mergeKnown(base, overrides) {
-  const out = { ...base };
+function mergeKnown(
+  base: RecallConfig,
+  overrides: Record<string, unknown>,
+): RecallConfig {
+  const out = { ...base } as Record<string, unknown>;
   for (const k of KNOWN_KEYS) {
     if (overrides[k] !== undefined) out[k] = overrides[k];
   }
-  return out;
+  return out as unknown as RecallConfig;
 }
 
 /**
  * Load effective config: DEFAULT_CONFIG < global < project (project wins).
- * @param {string} cwd
- * @param {(msg: string) => void} [warn] sink for non-fatal parse warnings
- * @returns {RecallConfig}
+ * `warn` is a sink for non-fatal parse warnings.
  */
-export function loadConfig(cwd, warn) {
+export function loadConfig(cwd: string, warn?: Warn): RecallConfig {
   const global = readJsonIfExists(
     join(getAgentDir(), "extensions", "pi-recall.json"),
     warn,
@@ -84,10 +93,8 @@ export function loadConfig(cwd, warn) {
 
 /**
  * Does `text` exceed pi-recall's own capture gate? Whichever limit is hit first wins (§5.1, §6).
- * @param {string} text
- * @param {RecallConfig} cfg
  */
-export function overGate(text, cfg) {
+export function overGate(text: string, cfg: RecallConfig): boolean {
   if (Buffer.byteLength(text, "utf8") > cfg.maxBytes) return true;
   // Count newlines + 1 without splitting (cheap on large blobs).
   let lines = 1;

@@ -13,15 +13,15 @@
     "url": "git+https://github.com/vitaliyslion/pi-recall.git"
   },
   "files": [
-    "index.js",
+    "index.ts",
     "src/",
     "README.md",
     "LICENSE"
   ],
   "type": "module",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "check": "node --check src/index.js && node --check src/store.js && node --check src/stub.js && node --check src/config.js",
+    "check": "tsgo --noEmit -p tsconfig.json",
     "smoke": "node test/smoke.js",
     "format": "oxfmt",
     "format:check": "oxfmt --check"
@@ -33,6 +33,8 @@
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.79.4",
+    "@types/node": "^22.19.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260621.1",
     "oxfmt": "^0.55.0"
   },
   "peerDependencies": {
@@ -43,7 +45,7 @@
   },
   "pi": {
     "extensions": [
-      "./index.js"
+      "./index.ts"
     ]
   }
 }

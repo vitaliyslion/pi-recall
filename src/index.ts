@@ -11,23 +11,29 @@
  */
 
 import { isBashToolResult } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ToolResultEvent,
+} from "@earendil-works/pi-coding-agent";
 import { readFile } from "node:fs/promises";
 import { Type } from "typebox";
-import { DEFAULT_CONFIG, loadConfig, overGate } from "./config.js";
-import { RecallStore } from "./store.js";
-import { computeTail, formatStub } from "./stub.js";
+import { DEFAULT_CONFIG, loadConfig, overGate } from "./config.ts";
+import { RecallStore } from "./store.ts";
+import { computeTail, formatStub } from "./stub.ts";
+
+/** One element of a tool result's content array (TextContent | ImageContent), derived from Pi. */
+type ContentPart = ToolResultEvent["content"][number];
+type TextPart = Extract<ContentPart, { type: "text" }>;
 
 /** TextContent parts joined; ImageContent ignored for sizing/indexing (passed through untouched). */
-function textOf(content) {
-  if (!Array.isArray(content))
-    return typeof content === "string" ? content : "";
+function textOf(content: ContentPart[]): string {
   return content
-    .filter((c) => c && c.type === "text" && typeof c.text === "string")
+    .filter((c): c is TextPart => c.type === "text")
     .map((c) => c.text)
     .join("");
 }
 
-function countLines(text) {
+function countLines(text: string): number {
   let n = 1;
   for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) n++;
   return n;
@@ -51,23 +57,20 @@ const PI_FOOTER_PATH = /\[Showing [^\]\n]*Full output: ([^\]\n]+)\]/;
 // temp file has no such line, so we re-attach it when we read the complete output from the temp file.
 const PI_FOOTER_TRAILER =
   /\[Showing [^\]\n]*Full output: [^\]\n]*\]\s*([\s\S]*)$/;
-function stripPiFooter(text) {
+function stripPiFooter(text: string): string {
   return text.replace(PI_FOOTER_STRIP, "");
 }
-function piFooterPath(text) {
+function piFooterPath(text: string): string | undefined {
   const m = PI_FOOTER_PATH.exec(text);
   return m ? m[1].trim() : undefined;
 }
-function piTrailingStatus(text) {
+function piTrailingStatus(text: string): string | undefined {
   const m = PI_FOOTER_TRAILER.exec(text);
   const t = m ? m[1].trim() : "";
   return t || undefined;
 }
 
-/**
- * @param {import("@earendil-works/pi-coding-agent").ExtensionAPI} pi
- */
-export default function piRecall(pi) {
+export default function piRecall(pi: ExtensionAPI): void {
   let cfg = DEFAULT_CONFIG;
   let store = new RecallStore(cfg);
   let active = false; // effective enabled = config.enabled && !--recall-off
@@ -136,7 +139,7 @@ export default function piRecall(pi) {
     // details.fullOutputPath on a successful truncation; on a failed command it only survives inside
     // the inline footer, so recover it from there too. Falsy → the inline content IS complete.
     const path = event.details?.fullOutputPath ?? piFooterPath(inline);
-    let full;
+    let full: string;
     try {
       // pi-recall holds the full text and answers entirely to its own config below — Pi's 50 KB /
       // 2000-line cap is just one more truncation the tool transparently covers.
@@ -161,9 +164,8 @@ export default function piRecall(pi) {
 
     try {
       await store.add(source, full, command);
-    } catch (e) {
+    } catch {
       // Indexing failed — don't replace the view, so the model still has Pi's output.
-      void e;
       return;
     }
 
@@ -211,6 +213,7 @@ export default function piRecall(pi) {
               text: `(no matches for "${query}"${source ? ` in ${source}` : ""})`,
             },
           ],
+          details: undefined,
         };
       }
       const text = r.hits
@@ -220,7 +223,7 @@ export default function piRecall(pi) {
           return `${header}\n${h.document.text}`;
         })
         .join("\n\n---\n\n");
-      return { content: [{ type: "text", text }] };
+      return { content: [{ type: "text", text }], details: undefined };
     },
   });
 
