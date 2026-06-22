@@ -22,7 +22,9 @@
   "main": "index.ts",
   "scripts": {
     "check": "tsgo --noEmit -p tsconfig.json",
-    "smoke": "node test/smoke.js",
+    "check:test": "tsgo --noEmit -p tsconfig.test.json",
+    "test": "vitest --run",
+    "test:watch": "vitest",
     "format": "oxfmt",
     "format:check": "oxfmt --check"
   },
@@ -35,7 +37,8 @@
     "@earendil-works/pi-coding-agent": "^0.79.4",
     "@types/node": "^22.19.0",
     "@typescript/native-preview": "^7.0.0-dev.20260621.1",
-    "oxfmt": "^0.55.0"
+    "oxfmt": "^0.55.0",
+    "vitest": "^4.1.9"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.79.0"

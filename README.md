@@ -97,10 +97,11 @@ Code defaults are layered under two optional JSON files (project wins):
 
 ## Layout
 
-- `src/` — the extension: `index.js` (factory: hook, recall tool, lifecycle, command), `store.js`
-  (Orama index lifecycle), `stub.js` (stub formatting), `config.js` (merged-JSON config + gate).
-- `test/smoke.js` — in-process end-to-end check (capture → index → stub → recall → persist/restore),
-  no model calls. Run with `npm run smoke`.
+- `src/` — the extension: `index.ts` (factory: hook, recall tool, lifecycle, command), `store.ts`
+  (Orama index lifecycle), `stub.ts` (stub formatting), `config.ts` (merged-JSON config + gate).
+- `test/` — Vitest suite, no model calls: unit specs (`config`/`stub`/`store`) plus
+  `integration/` (capture → index → stub → recall → persist/restore) driving the real extension
+  runtime through a mocked bash backend. Run with `npm test`.
 - `probes/` — the §1 POC gate: `v2-orama/` (Orama round-trip).
 - `eval/` — the §7 harness comparing native Pi (A) vs pi-recall (C) on buried-answer tasks.
 - `docs/SPEC.md` — the full design.
@@ -108,7 +109,7 @@ Code defaults are layered under two optional JSON files (project wins):
 ## Verify
 
 ```bash
-npm run smoke                   # in-process end-to-end, no model calls
+npm test                        # Vitest unit + integration suite, no model calls
 ```
 
 See [`docs/SPEC.md`](docs/SPEC.md) for the full design, open questions, and eval plan.
