@@ -158,7 +158,7 @@ export default function piRecall(pi: ExtensionAPI): void {
     // (When Pi did truncate, `full` is the large pre-truncation text and is always over the gate.)
     if (!overGate(full, cfg)) return; // below our gate → pass through unchanged
 
-    const source = `exec:${event.toolCallId}`;
+    const source = store.shortSource(event.toolCallId);
     const command =
       typeof event.input?.command === "string" ? event.input.command : "";
 

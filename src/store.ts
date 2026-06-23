@@ -11,6 +11,7 @@ import {
   persistToFile,
   restoreFromFile,
 } from "@orama/plugin-data-persistence/server";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -73,8 +74,21 @@ export class RecallStore {
   }
 
   /**
+   * Mint a short, git-style source id: the hex SHA-1 of `toolCallId`, truncated to the shortest
+   * prefix (>= `minLen`) not already keyed this session — lengthened by one on a collision.
+   */
+  shortSource(toolCallId: string, minLen = 5): string {
+    const hash = createHash("sha1").update(toolCallId).digest("hex");
+    for (let len = minLen; len <= hash.length; len++) {
+      const candidate = `exec:${hash.slice(0, len)}`;
+      if (!this.commands.has(candidate)) return candidate;
+    }
+    return `exec:${hash}`; // unreachable in practice (full sha1 already keyed)
+  }
+
+  /**
    * Chunk `full` into ~chunkLines-line groups and insert under `source` (§5.2).
-   * `source` is e.g. "exec:<toolCallId>"; `full` is the complete, un-truncated output.
+   * `source` is e.g. "exec:<short>" (see shortSource); `full` is the complete, un-truncated output.
    */
   async add(source: string, full: string, command: string): Promise<number> {
     const lines = full.split("\n");

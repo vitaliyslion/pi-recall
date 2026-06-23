@@ -211,7 +211,7 @@ pi.on("tool_result", async (event, ctx) => {
     ? await readFile(path, "utf8")                      // path set ⟹ Pi truncated (>50 KB/2000 lines)
     : textOf(event.content);                            // no path ⟹ content IS the complete output
   if (!overGate(full, cfg)) return;                     // one config-driven gate on the COMPLETE output
-  const source = `exec:${event.toolCallId}`;
+  const source = index.shortSource(event.toolCallId);  // short git-style id (§5.3)
   await index.add(source, full, event.input.command);   // chunk + insertMultiple (§5.2)
   return { content: [{ type: "text", text: stub(event, source, full) }] };  // replace view (§5.4)
 });
@@ -246,10 +246,10 @@ the V2 probe validated:
 
 ### 5.3 Source-id scheme
 
-Each capture is keyed `source = "exec:<toolCallId>"`. `event.toolCallId` is unique per tool call and
-present on the result event, so it needs no counter of our own and lets `recall` scope to one exact
-capture. The originating `command` is stored alongside (an extra field or a small in-memory
-manifest) so stubs and recall hits can show *which* command produced the blob.
+Each capture is keyed `source = "exec:<hash>"`, a short **git-style** id minted by `shortSource`: the
+hex SHA-1 of `event.toolCallId`, truncated to the shortest prefix (≥ 5 chars) not already keyed this
+session and lengthened by one on a collision. The originating `command` is stored alongside (an extra
+field or a small in-memory manifest) so stubs and recall hits can show *which* command produced the blob.
 
 ### 5.4 Stub format
 
@@ -396,7 +396,7 @@ single `overGate(full, cfg)` check and the `tailLines` stub then govern both cas
 pi-recall's own config covers Pi's 50 KB cap rather than deferring to it.
 
 Earlier-draft keys are gone: `captureThresholdBytes` is now the proper `maxBytes`/`maxLines` pair;
-`sourceNamespace` → ids are `exec:<toolCallId>` (§5.3); `ttlHours` → `snapshotTtlDays`; the free-text
+`sourceNamespace` → ids are short git-style `exec:<hash>` (§5.3); `ttlHours` → `snapshotTtlDays`; the free-text
 stub template → a structured stub (§5.4); `language` dropped — **English only.**
 
 ---

@@ -3,6 +3,7 @@ import { bigOutput, NEEDLE } from "../helpers/fixtures.ts";
 import {
   makeRecall,
   type RecallHarness,
+  sourceOf,
   textOf,
 } from "../helpers/recall-session.ts";
 import { makeTempDirs, type TempDirs } from "../helpers/tmp.ts";
@@ -44,7 +45,7 @@ describe("capture hook (mocked bash, real runner)", () => {
     );
     const stub = textOf(res);
     expect(stub).toContain("pi-recall");
-    expect(stub).toContain("exec:7f3a");
+    expect(stub).toMatch(/indexed as exec:[0-9a-f]{5,}/); // git-style short id
     expect(stub).not.toContain(NEEDLE);
     expect(stub).toMatch(/Searchable terms:/);
   });
@@ -58,7 +59,7 @@ describe("capture hook (mocked bash, real runner)", () => {
     const stub = textOf(res);
     const lines = Number(/full output \((\d+) lines/.exec(stub)?.[1] ?? 0);
     expect(lines).toBeGreaterThanOrEqual(3000); // not Pi's kept tail
-    const hit = await h.recall({ query: NEEDLE, source: "exec:d00d" });
+    const hit = await h.recall({ query: NEEDLE, source: sourceOf(res) });
     expect(hit).toContain(NEEDLE); // a line buried above Pi's tail is still recallable
   });
 
@@ -71,13 +72,13 @@ describe("capture hook (mocked bash, real runner)", () => {
       },
     );
     const stub = textOf(res);
-    expect(stub).toContain("exec:f00d");
+    expect(stub).toMatch(/indexed as exec:[0-9a-f]{5,}/);
     expect(stub).not.toContain("Full output:"); // Pi's footer dropped
     expect(stub).not.toMatch(/\/tmp\/|pi-bash/); // Pi's temp path dropped
     expect(stub).toContain("Command exited with code 1"); // real status kept
     const lines = Number(/full output \((\d+) lines/.exec(stub)?.[1] ?? 0);
     expect(lines).toBeGreaterThanOrEqual(3000);
-    const hit = await h.recall({ query: NEEDLE, source: "exec:f00d" });
+    const hit = await h.recall({ query: NEEDLE, source: sourceOf(res) });
     expect(hit).toContain(NEEDLE); // buried above Pi's kept tail
   });
 
@@ -90,9 +91,9 @@ describe("capture hook (mocked bash, real runner)", () => {
       },
     );
     const stub = textOf(res);
-    expect(stub).toContain("exec:e44d");
+    expect(stub).toMatch(/indexed as exec:[0-9a-f]{5,}/);
     expect(stub).not.toContain(NEEDLE);
-    const hit = await h.recall({ query: NEEDLE, source: "exec:e44d" });
+    const hit = await h.recall({ query: NEEDLE, source: sourceOf(res) });
     expect(hit).toContain(NEEDLE);
   });
 });

@@ -37,6 +37,13 @@ export function textOf(res: EmitResult): string {
     .join("");
 }
 
+/** The self-minted source id pi-recall assigned this capture (parsed from its stub). */
+export function sourceOf(res: EmitResult): string {
+  const m = /indexed as (exec:[0-9a-f]+)/.exec(textOf(res));
+  if (!m) throw new Error("no pi-recall source id in result stub");
+  return m[1];
+}
+
 /** Notifications and statuses the extension pushed through ctx.ui, captured for assertions. */
 export interface CapturedUI {
   notifications: Array<{ level: string; message: string }>;

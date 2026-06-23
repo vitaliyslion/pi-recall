@@ -18,7 +18,7 @@ command.
 2. **Gate** — output over pi-recall's own (lower, configurable) gate — default **200 lines / 5 KB** —
    is captured; smaller output passes through unchanged.
 3. **Index** — captured output is chunked (~20-line groups) and inserted into an in-process Orama
-   index under `source: "exec:<toolCallId>"`. Snapshots persist under `getAgentDir()/pi-recall/` and
+   index under a short git-style id `source: "exec:<hash>"`. Snapshots persist under `getAgentDir()/pi-recall/` and
    restore on session resume.
 4. **Stub** — the rendered output is replaced with the tail Pi already kept + an index card:
    *notable lines* (auto-highlighted error/warning matches), *searchable terms* (via Orama's own

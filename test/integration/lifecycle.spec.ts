@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bigOutput, NEEDLE } from "../helpers/fixtures.ts";
-import { makeRecall, type RecallHarness } from "../helpers/recall-session.ts";
+import {
+  makeRecall,
+  type RecallHarness,
+  sourceOf,
+} from "../helpers/recall-session.ts";
 import { makeTempDirs, type TempDirs } from "../helpers/tmp.ts";
 
 describe("session lifecycle", () => {
@@ -19,16 +23,18 @@ describe("session lifecycle", () => {
     const sessionId = "round-trip-1";
     const a = await makeRecall({ cwd: dirs.cwd, sessionId });
     harnesses.push(a);
-    await a.runBash("7f3a", bigOutput({ lines: 500, needleAt: 300 }));
+    const res = await a.runBash(
+      "7f3a",
+      bigOutput({ lines: 500, needleAt: 300 }),
+    );
+    const source = sourceOf(res);
     await a.shutdown("quit");
 
     const b = await makeRecall({ cwd: dirs.cwd, sessionId, autoStart: false });
     harnesses.push(b);
     await b.start("resume");
     expect(b.ui.notified("restored")).toBe(true);
-    expect(await b.recall({ query: NEEDLE, source: "exec:7f3a" })).toContain(
-      NEEDLE,
-    );
+    expect(await b.recall({ query: NEEDLE, source })).toContain(NEEDLE);
   });
 
   it("--recall-off passes everything through and reports off in the status line", async () => {

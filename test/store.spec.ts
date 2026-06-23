@@ -74,6 +74,27 @@ describe("RecallStore", () => {
     );
   });
 
+  it("mints a 5-char git-style source id decoupled from the long provider id", () => {
+    const store = new RecallStore(DEFAULT_CONFIG);
+    const src = store.shortSource("toolu_01AbcdefghijklmnopqrstuV");
+    expect(src).toMatch(/^exec:[0-9a-f]{5}$/);
+    // Deterministic: same tool-call id always hashes to the same short id.
+    expect(store.shortSource("toolu_01AbcdefghijklmnopqrstuV")).toBe(src);
+    // Two providers' ids that share a long constant prefix still get distinct ids.
+    expect(store.shortSource("call_xyz")).not.toBe(src);
+  });
+
+  it("lengthens the source id by one on collision (git-style)", async () => {
+    const store = new RecallStore(DEFAULT_CONFIG);
+    const id = "toolu_collide";
+    const first = store.shortSource(id);
+    // Key it, then ask again with the SAME id → 5-char prefix is taken, so it grows to 6.
+    await store.add(first, "x\ny", "cmd");
+    const second = store.shortSource(id);
+    expect(second.length).toBe(first.length + 1);
+    expect(second.startsWith(first)).toBe(true);
+  });
+
   it("evicts snapshots older than the TTL", async () => {
     const store = new RecallStore({ ...DEFAULT_CONFIG, snapshotTtlDays: 7 });
     await store.restore("old-sess");
