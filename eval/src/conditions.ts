@@ -10,6 +10,7 @@ import {
   DefaultResourceLoader,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { pathToFileURL } from "node:url";
 import { isAbsolute, resolve } from "node:path";
 
@@ -21,12 +22,20 @@ export const RECALL_PROJECT_CONFIG = {
   persist: false,
 };
 
+/** Either runnable extension factories, or a `skip` message when the condition can't load. */
+export type ConditionResult =
+  | { factories: ExtensionFactory[] }
+  | { skip: string };
+
 /**
  * Resolve the extension factories for a condition.
  * Returns { factories } on success, or { skip } when condition C's extension can't be loaded
  * (e.g. pi-recall's src/ doesn't exist yet) — the harness then skips C with this message.
  */
-export async function resolveCondition(condition, extPath) {
+export async function resolveCondition(
+  condition: string,
+  extPath: string,
+): Promise<ConditionResult> {
   if (condition === "A") return { factories: [] };
   if (condition === "C") {
     try {
@@ -41,17 +50,21 @@ export async function resolveCondition(condition, extPath) {
       if (typeof factory !== "function") {
         throw new Error("module has no default extension factory export");
       }
-      return { factories: [factory] };
+      return { factories: [factory as ExtensionFactory] };
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       return {
-        skip: `condition C skipped: pi-recall extension not loadable at ${extPath} (${e.message})`,
+        skip: `condition C skipped: pi-recall extension not loadable at ${extPath} (${msg})`,
       };
     }
   }
   return { skip: `unknown condition "${condition}"` };
 }
 
-export function makeLoader(cwd, factories) {
+export function makeLoader(
+  cwd: string,
+  factories: ExtensionFactory[],
+): DefaultResourceLoader {
   return new DefaultResourceLoader({
     cwd,
     agentDir: getAgentDir(),

@@ -1,32 +1,51 @@
 // Eval harness CLI entry. Drives every (task × condition × trial) and prints + persists a report.
 //
-//   node src/run.js [--tasks all|id,id] [--conditions A,C] [--trials N]
+//   node src/run.ts [--tasks all|id,id] [--conditions A,C] [--trials N]
 //                   [--model provider/id] [--ext <path>] [--out <file>]
 //
 // Conditions: A = native Pi, C = pi-recall (skipped with a message until the extension exists).
 // NOTE: runs make real, paid model calls — keep the task set small and prefer a cheap --model.
 
-import { readdir, readFile, mkdir, writeFile, stat } from "node:fs/promises";
+import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { resolveCondition } from "./conditions.js";
-import { runTrial } from "./harness.js";
-import { aggregate, printReport } from "./report.js";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { Model } from "@earendil-works/pi-ai";
+import { resolveCondition } from "./conditions.ts";
+import { runTrial, type Task, type TrialRecord } from "./harness.ts";
+import { aggregate, type Aggregated, printReport } from "./report.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EVAL_ROOT = join(HERE, "..");
 const TASKS_DIR = join(EVAL_ROOT, "tasks");
 const RESULTS_DIR = join(EVAL_ROOT, "results");
-const DEFAULT_EXT = join(EVAL_ROOT, "..", "src", "index.js"); // pi-recall extension (when built)
+const DEFAULT_EXT = join(EVAL_ROOT, "..", "src", "index.ts"); // pi-recall extension entry
 
-function parseArgs(argv) {
-  const out = {
+interface Args {
+  tasks: string;
+  conditions: string[];
+  trials: number;
+  model: string | null;
+  ext: string;
+  outFile: string | null;
+  help: boolean;
+}
+
+interface LoadedTask {
+  task: Task;
+  taskDir: string;
+  id: string;
+}
+
+function parseArgs(argv: string[]): Args {
+  const out: Args = {
     tasks: "all",
     conditions: ["A", "C"],
     trials: 3,
     model: null,
     ext: DEFAULT_EXT,
     outFile: null,
+    help: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -46,22 +65,26 @@ function parseArgs(argv) {
   return out;
 }
 
-async function loadTasks(filter) {
+async function loadTasks(filter: string): Promise<LoadedTask[]> {
   const entries = await readdir(TASKS_DIR, { withFileTypes: true });
   const ids = entries.filter((e) => e.isDirectory()).map((e) => e.name);
   const want =
     filter === "all" ? null : new Set(filter.split(",").map((s) => s.trim()));
-  const tasks = [];
+  const tasks: LoadedTask[] = [];
   for (const id of ids) {
     if (want && !want.has(id)) continue;
     const taskDir = join(TASKS_DIR, id);
-    const task = JSON.parse(await readFile(join(taskDir, "task.json"), "utf8"));
+    const task = JSON.parse(
+      await readFile(join(taskDir, "task.json"), "utf8"),
+    ) as Task;
     tasks.push({ task, taskDir, id });
   }
   return tasks.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-async function resolveModel(spec) {
+async function resolveModel(
+  spec: string | null,
+): Promise<Model<any> | undefined> {
   if (!spec) return undefined; // SDK uses settings default
   const slash = spec.indexOf("/");
   if (slash < 0)
@@ -69,14 +92,17 @@ async function resolveModel(spec) {
   const provider = spec.slice(0, slash);
   const id = spec.slice(slash + 1);
   const { getModel } = await import("@earendil-works/pi-ai");
-  return getModel(provider, id);
+  return (getModel as (provider: string, modelId: string) => Model<any>)(
+    provider,
+    id,
+  );
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(
-      "Usage: node src/run.js [--tasks all|id,..] [--conditions A,C] [--trials N] [--model provider/id] [--ext path] [--out file]",
+      "Usage: node src/run.ts [--tasks all|id,..] [--conditions A,C] [--trials N] [--model provider/id] [--ext path] [--out file]",
     );
     return;
   }
@@ -94,11 +120,11 @@ async function main() {
   console.log(`model: ${args.model ?? "(settings default)"}`);
 
   // Resolve conditions once (this is where C is skipped if the extension isn't built).
-  const condFactories = {};
-  const activeConditions = [];
+  const condFactories: Record<string, ExtensionFactory[]> = {};
+  const activeConditions: string[] = [];
   for (const cond of args.conditions) {
     const r = await resolveCondition(cond, args.ext);
-    if (r.skip) {
+    if ("skip" in r) {
       console.log(`! ${r.skip}`);
       continue;
     }
@@ -111,12 +137,14 @@ async function main() {
   }
 
   // results[taskId][cond] = aggregated; rawTrials keeps every record for the JSON file.
-  const results = {};
-  const rawTrials = [];
+  const results: Record<string, Record<string, Aggregated>> = {};
+  const rawTrials: Array<
+    { taskId: string; condition: string; trial: number } & TrialRecord
+  > = [];
   for (const { task, taskDir, id } of tasks) {
     results[id] = {};
     for (const cond of activeConditions) {
-      const trials = [];
+      const trials: TrialRecord[] = [];
       for (let t = 0; t < args.trials; t++) {
         process.stdout.write(
           `  ${id} [${cond}] trial ${t + 1}/${args.trials} ... `,
@@ -149,7 +177,6 @@ async function main() {
     JSON.stringify({ args: { ...args }, results, rawTrials }, null, 2),
   );
   console.log(`raw results -> ${outFile}`);
-  void stat;
 }
 
 main().catch((e) => {

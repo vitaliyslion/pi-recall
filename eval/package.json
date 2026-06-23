@@ -5,8 +5,9 @@
   "description": "Evaluation harness for pi-recall (SPEC §7): compares native Pi (A) vs pi-recall (C) on buried-answer tasks.",
   "type": "module",
   "scripts": {
-    "run": "node src/run.js",
-    "mine": "node src/mine.js"
+    "run": "node src/run.ts",
+    "mine": "node src/mine.ts",
+    "check": "tsgo --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.79.4",

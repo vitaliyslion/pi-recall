@@ -5,7 +5,7 @@
 // human review under eval/mined/. It never writes into the committed tasks/ suite: a human turns a
 // promising candidate into a real fixture (a frozen fixture.sh + a question + an expected regex).
 //
-//   node src/mine.js [--limit N] [--min-bytes N] [--sessions <dir>]
+//   node src/mine.ts [--limit N] [--min-bytes N] [--sessions <dir>]
 //
 // Session format (docs/session-format.md): JSONL, one entry per line, entries of
 //   {type:"message", id, parentId, message:<AgentMessage>}.
@@ -13,7 +13,7 @@
 // is a later {role:"toolResult", toolName:"bash", details?:{fullOutputPath}} message. Inline/user
 // bash is a {role:"bashExecution", command, output, truncated, fullOutputPath} message.
 
-import { readdir, readFile, mkdir, writeFile, stat } from "node:fs/promises";
+import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -24,8 +24,49 @@ const EVAL_ROOT = join(HERE, "..");
 const DEFAULT_SESSIONS = join(homedir(), ".pi", "agent", "sessions");
 const OUT_DIR = join(EVAL_ROOT, "mined");
 
-function parseArgs(argv) {
-  const out = { limit: 20, minBytes: 5120, sessions: DEFAULT_SESSIONS };
+interface Args {
+  limit: number;
+  minBytes: number;
+  sessions: string;
+}
+
+interface ContentBlock {
+  type?: string;
+  text?: string;
+  name?: string;
+  id?: string;
+  arguments?: { command?: string };
+}
+
+interface SessionMessage {
+  role?: string;
+  content?: ContentBlock[];
+  toolName?: string;
+  toolCallId?: string;
+  details?: { fullOutputPath?: string };
+  command?: string;
+  output?: string;
+  truncated?: boolean;
+  fullOutputPath?: string;
+}
+
+interface SessionEntry {
+  type?: string;
+  message?: SessionMessage;
+}
+
+interface Candidate {
+  file: string;
+  command: string;
+  bytes: number;
+  truncated: boolean;
+  fullOutputPath: string | null;
+  fullOutputExists: boolean;
+  sampleTail: string;
+}
+
+function parseArgs(argv: string[]): Args {
+  const out: Args = { limit: 20, minBytes: 5120, sessions: DEFAULT_SESSIONS };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--limit") out.limit = Number(argv[++i]);
@@ -35,7 +76,7 @@ function parseArgs(argv) {
   return out;
 }
 
-async function* walkJsonl(dir) {
+async function* walkJsonl(dir: string): AsyncGenerator<string> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -49,28 +90,28 @@ async function* walkJsonl(dir) {
   }
 }
 
-const textLen = (content) =>
+const textLen = (content: ContentBlock[] | undefined): number =>
   Array.isArray(content)
     ? content
         .filter((c) => c?.type === "text")
-        .map((c) => c.text)
+        .map((c) => c.text ?? "")
         .join("").length
     : 0;
-const textOf = (content) =>
+const textOf = (content: ContentBlock[] | undefined): string =>
   Array.isArray(content)
     ? content
         .filter((c) => c?.type === "text")
-        .map((c) => c.text)
+        .map((c) => c.text ?? "")
         .join("")
     : "";
 
 /** Pull candidate buried-output bash captures from one session file. */
-async function mineFile(file, minBytes) {
+async function mineFile(file: string, minBytes: number): Promise<Candidate[]> {
   const lines = (await readFile(file, "utf8")).split("\n").filter(Boolean);
-  const commandByCallId = new Map();
-  const candidates = [];
+  const commandByCallId = new Map<string, string>();
+  const candidates: Candidate[] = [];
   for (const line of lines) {
-    let entry;
+    let entry: SessionEntry;
     try {
       entry = JSON.parse(line);
     } catch {
@@ -83,7 +124,7 @@ async function mineFile(file, minBytes) {
     if (m.role === "assistant") {
       for (const c of m.content ?? []) {
         if (c?.type === "toolCall" && c.name === "bash") {
-          commandByCallId.set(c.id, c.arguments?.command ?? "");
+          commandByCallId.set(c.id ?? "", c.arguments?.command ?? "");
         }
       }
     } else if (m.role === "toolResult" && m.toolName === "bash") {
@@ -92,7 +133,8 @@ async function mineFile(file, minBytes) {
       if (bytes >= minBytes || fullOutputPath) {
         candidates.push({
           file,
-          command: commandByCallId.get(m.toolCallId) ?? "(unknown command)",
+          command:
+            commandByCallId.get(m.toolCallId ?? "") ?? "(unknown command)",
           bytes,
           truncated: Boolean(fullOutputPath),
           fullOutputPath: fullOutputPath ?? null,
@@ -120,18 +162,19 @@ async function mineFile(file, minBytes) {
   return candidates;
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   console.log(
     `Mining sessions under ${args.sessions} (min ${args.minBytes} bytes)...`,
   );
 
-  const all = [];
+  const all: Candidate[] = [];
   for await (const file of walkJsonl(args.sessions)) {
     try {
       all.push(...(await mineFile(file, args.minBytes)));
     } catch (e) {
-      console.warn(`  skip ${file}: ${e.message}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`  skip ${file}: ${msg}`);
     }
   }
   all.sort((a, b) => b.bytes - a.bytes);
@@ -174,7 +217,6 @@ async function main() {
   console.log(
     `\n${picked.length} candidate(s) -> ${OUT_DIR} (review, then promote good ones into tasks/).`,
   );
-  void stat;
 }
 
 main().catch((e) => {

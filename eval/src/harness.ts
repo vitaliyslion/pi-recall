@@ -5,6 +5,11 @@ import {
   createAgentSession,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionFactory,
+  ExtensionUIContext,
+} from "@earendil-works/pi-coding-agent";
+import type { Model } from "@earendil-works/pi-ai";
 import {
   mkdtemp,
   mkdir,
@@ -15,23 +20,60 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeLoader, RECALL_PROJECT_CONFIG } from "./conditions.js";
-import { analyzeMessages, checkAccuracy } from "./metrics.js";
+import { makeLoader, RECALL_PROJECT_CONFIG } from "./conditions.ts";
+import {
+  analyzeMessages,
+  checkAccuracy,
+  type EvalMessage,
+  type ExpectSpec,
+  type Metrics,
+} from "./metrics.ts";
 
 // Headless no-op UI context for bindExtensions: every method is a no-op. Extensions that call
 // ctx.ui.notify / setStatus (pi-recall does) must not throw in a non-interactive run.
-const HEADLESS_UI = new Proxy({}, { get: () => () => undefined });
+const HEADLESS_UI = new Proxy(
+  {},
+  { get: () => () => undefined },
+) as unknown as ExtensionUIContext;
 
-/**
- * Run one trial.
- * @param {object} a
- * @param {object} a.task     parsed task.json
- * @param {string} a.taskDir  directory containing fixture.sh
- * @param {"A"|"C"} a.condition
- * @param {Function[]} a.factories  extension factories for the condition (from resolveCondition)
- * @param {object|undefined} a.model  resolved Model, or undefined to use Pi's settings default
- */
-export async function runTrial({ task, taskDir, condition, factories, model }) {
+/** Parsed task.json: a prompt and an optional programmatic expectation. */
+export interface Task {
+  prompt: string;
+  expect?: ExpectSpec;
+}
+
+/** Per-trial record: behavioral metrics plus run status and token/cost totals. */
+export interface TrialRecord extends Metrics {
+  ok: boolean;
+  error: string | null;
+  accurate: boolean | null;
+  tokensTotal: number | null;
+  tokensInput: number | null;
+  tokensOutput: number | null;
+  contextTokens: number | null;
+  cost: number | null;
+}
+
+export interface RunTrialArgs {
+  /** parsed task.json */
+  task: Task;
+  /** directory containing fixture.sh */
+  taskDir: string;
+  condition: string;
+  /** extension factories for the condition (from resolveCondition) */
+  factories: ExtensionFactory[];
+  /** resolved Model, or undefined to use Pi's settings default */
+  model: Model<any> | undefined;
+}
+
+/** Run one trial. */
+export async function runTrial({
+  task,
+  taskDir,
+  condition,
+  factories,
+  model,
+}: RunTrialArgs): Promise<TrialRecord> {
   // Isolated cwd per trial: copy in the fixture, never touch the committed tasks/ dir, and let the
   // in-memory session write nothing of its own.
   const cwd = await mkdtemp(join(tmpdir(), "pi-recall-eval-"));
@@ -64,27 +106,21 @@ export async function runTrial({ task, taskDir, condition, factories, model }) {
     // pi-recall arms its capture hook in session_start, so we must trigger it here or C never captures.
     await session.bindExtensions({ uiContext: HEADLESS_UI, mode: "print" });
 
-    const eventCounts = {};
+    const eventCounts: Record<string, number> = {};
     const unsub = session.subscribe((e) => {
       eventCounts[e.type] = (eventCounts[e.type] ?? 0) + 1;
     });
 
-    let error = null;
+    let error: string | null = null;
     try {
       await session.prompt(task.prompt);
     } catch (e) {
-      error = e?.message ?? String(e);
+      error = e instanceof Error ? e.message : String(e);
     }
 
-    const messages = session.messages;
-    const stats =
-      typeof session.getSessionStats === "function"
-        ? session.getSessionStats()
-        : null;
-    const ctx =
-      typeof session.getContextUsage === "function"
-        ? session.getContextUsage()
-        : null;
+    const messages = session.messages as unknown as EvalMessage[];
+    const stats = session.getSessionStats();
+    const ctx = session.getContextUsage();
 
     unsub();
     session.dispose();

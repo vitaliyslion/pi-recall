@@ -18,23 +18,24 @@ large output, the part Pi's tail-truncation drops:
 ```bash
 cd eval
 npm install
-node src/run.js --conditions A --trials 1                 # baseline self-test (no extension needed)
-node src/run.js --conditions A,C --trials 3               # full A-vs-C (needs pi-recall built)
-node src/run.js --tasks build-warning-buried --model anthropic/claude-haiku-4-5 --trials 2
+node src/run.ts --conditions A --trials 1                 # baseline self-test (no extension needed)
+node src/run.ts --conditions A,C --trials 3               # full A-vs-C (needs pi-recall built)
+node src/run.ts --tasks build-warning-buried --model anthropic/claude-haiku-4-5 --trials 2
 ```
 
-Flags: `--tasks all|id,id`, `--conditions A,C`, `--trials N`, `--model provider/id`
-(default = Pi's settings), `--ext <path>` (pi-recall factory, default `../src/index.js`),
+The sources are TypeScript, run directly via Node's native type stripping (Node ≥ 22.19); there is no
+build step. Flags: `--tasks all|id,id`, `--conditions A,C`, `--trials N`, `--model provider/id`
+(default = Pi's settings), `--ext <path>` (pi-recall factory, default `../src/index.ts`),
 `--out <file>`. Raw per-trial JSON lands in `results/` (gitignored).
 
 **Condition C is skipped** with a clear message until the pi-recall extension exists at `--ext`
-(default `../src/index.js`). So A + the fixtures are useful immediately; C goes live the moment the
+(default `../src/index.ts`). So A + the fixtures are useful immediately; C goes live the moment the
 extension is built. For C, the harness writes a fixed gate to `<cwd>/.pi/pi-recall.json`
 (`maxLines:200, maxBytes:5120, persist:false`) so the threshold is constant and no snapshots hit disk.
 
 ## Headless SDK integration notes (load-bearing)
 
-Two non-obvious facts about driving Pi via `createAgentSession` (both handled in `harness.js`):
+Two non-obvious facts about driving Pi via `createAgentSession` (both handled in `harness.ts`):
 
 1. **`session_start` is not emitted automatically.** The TUI/CLI calls `session.bindExtensions(...)`,
    which is what fires `session_start` (agent-session.js). pi-recall arms its capture hook in
@@ -81,7 +82,7 @@ Add a task: create `tasks/<id>/fixture.sh` (deterministic; bury the answer outsi
 ## Optional: mine real transcripts
 
 ```bash
-node src/mine.js --limit 10 --min-bytes 5120
+node src/mine.ts --limit 10 --min-bytes 5120
 ```
 
 Scans `~/.pi/agent/sessions` for large/truncated `bash` captures and writes review candidates to

@@ -2,14 +2,34 @@
 // prints an A-vs-C comparison. The headline the harness makes legible (SPEC §7): C lowers
 // tokens-into-context while holding/raising accuracy, with a non-trivial recall rate.
 
-const rate = (arr, pred) =>
+import type { TrialRecord } from "./harness.ts";
+
+const rate = <T>(arr: T[], pred: (t: T) => boolean): number | null =>
   arr.length ? arr.filter(pred).length / arr.length : null;
-const mean = (arr, pick) => {
-  const xs = arr.map(pick).filter((x) => typeof x === "number");
+const mean = <T>(
+  arr: T[],
+  pick: (t: T) => number | null | undefined,
+): number | null => {
+  const xs = arr.map(pick).filter((x): x is number => typeof x === "number");
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 };
 
-export function aggregate(trials) {
+/** Per-(task, condition) rollup of a set of trials. */
+export interface Aggregated {
+  n: number;
+  accuracyRate: number | null;
+  recallRate: number | null;
+  rerunRate: number | null;
+  rereadRate: number | null;
+  captureRate: number | null;
+  errorRate: number | null;
+  bashResultChars: number | null;
+  tokensTotal: number | null;
+  contextTokens: number | null;
+  cost: number | null;
+}
+
+export function aggregate(trials: TrialRecord[]): Aggregated {
   return {
     n: trials.length,
     accuracyRate: rate(trials, (t) => t.accurate === true),
@@ -25,27 +45,22 @@ export function aggregate(trials) {
   };
 }
 
-const pct = (x) => (x === null ? "  -" : `${Math.round(x * 100)}%`.padStart(4));
-const num = (x) =>
+const pct = (x: number | null): string =>
+  x === null ? "  -" : `${Math.round(x * 100)}%`.padStart(4);
+const num = (x: number | null): string =>
   x === null
     ? "-"
     : x >= 1000
       ? Math.round(x).toLocaleString("en-US")
       : String(Math.round(x));
-const money = (x) => (x === null ? "-" : `$${x.toFixed(4)}`);
+const money = (x: number | null): string =>
+  x === null ? "-" : `$${x.toFixed(4)}`;
 
 /** results: { [taskId]: { [condition]: aggregated } } */
-export function printReport(results, conditions) {
-  const cols = [
-    "acc",
-    "recall",
-    "rerun",
-    "reread",
-    "capt",
-    "bashChars",
-    "ctxTok",
-    "cost",
-  ];
+export function printReport(
+  results: Record<string, Record<string, Aggregated>>,
+  conditions: string[],
+): void {
   console.log("");
   for (const [taskId, byCond] of Object.entries(results)) {
     console.log(`■ ${taskId}`);
@@ -63,8 +78,8 @@ export function printReport(results, conditions) {
       );
     }
     // Per-task headline delta A->C when both present.
-    const A = byCond.A,
-      C = byCond.C;
+    const A = byCond.A;
+    const C = byCond.C;
     if (A && C && A.bashResultChars && C.bashResultChars) {
       const saved = 1 - C.bashResultChars / A.bashResultChars;
       const mag = Math.abs(Math.round(saved * 100));
@@ -75,5 +90,4 @@ export function printReport(results, conditions) {
     }
     console.log("");
   }
-  void cols;
 }

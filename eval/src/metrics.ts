@@ -7,20 +7,59 @@
 // AgentMessage shapes (from @earendil-works/pi-ai):
 //   assistant: { role:"assistant", content:[ {type:"text",text} | {type:"toolCall",id,name,arguments} ], usage }
 //   toolResult:{ role:"toolResult", toolName, content:[ {type:"text",text} ], isError }
+// We read these structurally (the SDK's AgentMessage union lives in a transitive dep), so the local
+// EvalMessage/ContentBlock shapes below describe just the fields this analysis touches.
 
 const FULLOUTPUT_PATH_RE = /fulloutput|pi-bash|\/tmp\/|tmpdir|\.pi[\\/]/i;
 
-function textOf(content) {
-  if (!Array.isArray(content))
+interface ContentBlock {
+  type?: string;
+  text?: string;
+  name?: string;
+  id?: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface EvalMessage {
+  role?: string;
+  content?: ContentBlock[];
+  stopReason?: string;
+  errorMessage?: string;
+  toolName?: string;
+}
+
+/** task.json's `expect`: a regex `pattern` or a case-insensitive `substring`. */
+export interface ExpectSpec {
+  pattern?: string;
+  substring?: string;
+}
+
+export interface Metrics {
+  bashCalls: number;
+  recallCalls: number;
+  readCalls: number;
+  rereadFullOutput: boolean;
+  bashResultChars: number;
+  captured: boolean;
+  finalAnswer: string;
+  apiError: string | null; // assistant turn that ended in stopReason "error"/"aborted"
+}
+
+function textOf(content: unknown): string {
+  if (!Array.isArray(content)) {
     return typeof content === "string" ? content : "";
-  return content
+  }
+  return (content as ContentBlock[])
     .filter((c) => c?.type === "text")
-    .map((c) => c.text)
+    .map((c) => c.text ?? "")
     .join("");
 }
 
 /** Analyze a finished session's messages into behavioral metrics. */
-export function analyzeMessages(messages, { stubMarker = "pi-recall" } = {}) {
+export function analyzeMessages(
+  messages: readonly EvalMessage[] | undefined,
+  { stubMarker = "pi-recall" }: { stubMarker?: string } = {},
+): Metrics {
   let bashCalls = 0;
   let recallCalls = 0;
   let readCalls = 0;
@@ -28,7 +67,7 @@ export function analyzeMessages(messages, { stubMarker = "pi-recall" } = {}) {
   let bashResultChars = 0;
   let captured = false;
   let finalAnswer = "";
-  let apiError = null; // assistant turn that ended in stopReason "error"/"aborted"
+  let apiError: string | null = null;
 
   for (const m of messages ?? []) {
     if (m.role === "assistant") {
@@ -72,11 +111,15 @@ export function analyzeMessages(messages, { stubMarker = "pi-recall" } = {}) {
 }
 
 /** Programmatic accuracy check against task.expect ({pattern} regex or {substring}). */
-export function checkAccuracy(answer, expect) {
+export function checkAccuracy(
+  answer: string | undefined,
+  expect: ExpectSpec | undefined,
+): boolean | null {
   if (!expect) return null;
   const a = answer ?? "";
   if (expect.pattern) return new RegExp(expect.pattern, "i").test(a);
-  if (expect.substring)
+  if (expect.substring) {
     return a.toLowerCase().includes(String(expect.substring).toLowerCase());
+  }
   return null;
 }
