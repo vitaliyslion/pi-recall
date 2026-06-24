@@ -112,11 +112,18 @@ export class RecallStore {
     query: string,
     source?: string,
     limit?: number,
+    groupByText = false,
   ): Promise<Results<RecallDoc>> {
     return search<AnyOrama, RecallDoc>(this.db, {
       term: query,
       where: source ? { source: { eq: source } } : undefined,
       limit: limit ?? this.cfg.recallLimit,
+      // Collapse verbatim-repeated output into one group per distinct `text`. Orama computes groups
+      // over the FULL match set (before `limit`/`offset`), so repeats never crowd out distinct matches
+      // and each group's hit list is every occurrence — letting the caller report an accurate line
+      // count. (We group by `text` only; `source` is an enum field, which groupBy can't bucket — the
+      // caller splits a group's hits by source, needed only for an unscoped cross-capture search.)
+      groupBy: groupByText ? { properties: ["text"] } : undefined,
     });
   }
 

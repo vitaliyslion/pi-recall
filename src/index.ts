@@ -204,8 +204,13 @@ export default function piRecall(pi: ExtensionAPI): void {
       limit: Type.Optional(Type.Number({ description: "Max hits to return." })),
     }),
     async execute(_toolCallId, { query, source, limit }) {
-      const r = await store.search(query, source, limit);
-      if (!r.hits.length) {
+      // Identical output can recur verbatim across a capture (e.g. a repeated log line chunked into
+      // several hits) — rendering each separately pollutes the result with duplicate blocks. Orama's
+      // groupBy collapses same-(source, text) hits and, because it groups over the full match set, the
+      // duplicates never consume the `limit` budget that bounds distinct blocks below.
+      const r = await store.search(query, source, undefined, true);
+      const groups = r.groups ?? [];
+      if (!groups.length) {
         return {
           content: [
             {
@@ -216,11 +221,35 @@ export default function piRecall(pi: ExtensionAPI): void {
           details: undefined,
         };
       }
-      const text = r.hits
-        .map((h) => {
-          const cmd = store.commandFor(h.document.source);
-          const header = `[${h.document.source} @ line ${h.document.startLine}${cmd ? ` — $ ${cmd}` : ""}]`;
-          return `${header}\n${h.document.text}`;
+      // Each Orama group is one distinct `text` (groupBy property order is ["text"]); split its hits
+      // by source so an unscoped search that matched the same line in two captures yields one block
+      // per capture. Groups arrive best-score-first, so block order stays relevance-ordered.
+      const blocks: { src: string; body: string; lines: number[] }[] = [];
+      for (const g of groups) {
+        const body = String(g.values[0]);
+        const bySource = new Map<string, number[]>();
+        for (const h of g.result) {
+          const lines = bySource.get(h.document.source);
+          if (lines) lines.push(h.document.startLine);
+          else bySource.set(h.document.source, [h.document.startLine]);
+        }
+        for (const [src, lines] of bySource) blocks.push({ src, body, lines });
+      }
+      const MAX_LINES_SHOWN = 3;
+      // `limit` bounds distinct blocks (not raw hits), so verbatim repeats can't squeeze out matches.
+      const text = blocks
+        .slice(0, limit ?? store.cfg.recallLimit)
+        .map(({ src, body, lines }) => {
+          const cmd = store.commandFor(src);
+          const sorted = [...lines].sort((a, b) => a - b);
+          const shown = sorted.slice(0, MAX_LINES_SHOWN).join(", ");
+          const extra = sorted.length - MAX_LINES_SHOWN;
+          const at =
+            extra > 0
+              ? `lines ${shown}, ...${extra} more`
+              : `line${sorted.length > 1 ? "s" : ""} ${shown}`;
+          const header = `[${src} @ ${at}${cmd ? ` — $ ${cmd}` : ""}]`;
+          return `${header}\n${body}`;
         })
         .join("\n\n---\n\n");
       return { content: [{ type: "text", text }], details: undefined };
