@@ -66,30 +66,62 @@ function notableLines(
 }
 
 /**
- * Copy-paste-searchable terms (§5.4). Rank by in-capture frequency, demoted by cross-capture
- * doc-frequency so distinctive tokens rise. Drop stopwords, very short, and purely-numeric tokens.
+ * Is `tok` worth offering as a searchable term? Drops stopwords, very short tokens, and low-value
+ * noise: purely-numeric, sha/hash-like hex blobs, and mostly-digit ids/timestamps that survive
+ * tokenization. None of these make a useful `recall()` query.
+ */
+function isCandidateTerm(tok: string): boolean {
+  if (tok.length < 3 || STOPWORDS.has(tok)) return false;
+  if (/^\d+$/.test(tok)) return false; // purely numeric
+  if (/^[0-9a-f]{6,}$/.test(tok)) return false; // hex blob (sha/hash fragment)
+  let digits = 0;
+  for (let i = 0; i < tok.length; i++) {
+    const c = tok.charCodeAt(i);
+    if (c >= 48 && c <= 57) digits++;
+  }
+  if (digits * 2 > tok.length) return false; // mostly digits (ids, timestamps)
+  return true;
+}
+
+/**
+ * Copy-paste-searchable terms (§5.4). Ranked by *distinctiveness, not repetition*: within-capture
+ * TF-IDF treating each line as a document, so tokens that appear on most lines (path fragments,
+ * pass/fail status words — easy to pick up but useless to search) get near-zero IDF and drop out,
+ * while tokens concentrated in a few lines (error types, unique symbols, a failing spec's name)
+ * rise. A small cross-capture demotion knocks down tokens common across the whole index.
  * Tokenized via Orama's own tokenizer so every term is the exact normalized form the index stores.
  */
-function searchableTerms(
+export function searchableTerms(
   store: RecallStore,
   full: string,
   want: number,
 ): string[] {
   if (want <= 0) return [];
-  const freq = new Map<string, number>();
-  // Tokenize per line: the tokenizer dedups within a single call, so a whole-blob call would lose
-  // frequency. Per-line tallying recovers a usable in-capture frequency.
-  for (const line of full.split("\n")) {
+  // tf: total occurrences. df: number of distinct lines containing the token (line-level document
+  // frequency). Tokenize per line — the tokenizer dedups within a single call, so a whole-blob call
+  // would lose both counts; per-line tallying recovers them.
+  const tf = new Map<string, number>();
+  const df = new Map<string, number>();
+  const lines = full.split("\n");
+  for (const line of lines) {
+    const seen = new Set<string>();
     for (const tok of store.tokenize(line)) {
-      if (tok.length < 3 || /^\d+$/.test(tok) || STOPWORDS.has(tok)) continue;
-      freq.set(tok, (freq.get(tok) ?? 0) + 1);
+      if (!isCandidateTerm(tok)) continue;
+      tf.set(tok, (tf.get(tok) ?? 0) + 1);
+      if (!seen.has(tok)) {
+        seen.add(tok);
+        df.set(tok, (df.get(tok) ?? 0) + 1);
+      }
     }
   }
+  const numLines = lines.length;
   const occ = store.tokenOccurrences();
   const scored: { tok: string; score: number }[] = [];
-  for (const [tok, f] of freq) {
-    // demote tokens that are common across captures (occ is doc-frequency over the whole index).
-    const score = f / (1 + (occ[tok] ?? 0));
+  for (const [tok, f] of tf) {
+    const idf = Math.log((numLines + 1) / ((df.get(tok) ?? 0) + 1));
+    const tfw = 1 + Math.log(f); // sublinear, so raw repetition can't dominate
+    // occ is doc-frequency over the whole index — a small extra demotion for session-common tokens.
+    const score = (tfw * idf) / (1 + (occ[tok] ?? 0));
     scored.push({ tok, score });
   }
   scored.sort((a, b) => b.score - a.score);

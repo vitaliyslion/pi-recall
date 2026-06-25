@@ -286,9 +286,12 @@ Three parts, each cheap and computed from the full text we already hold at captu
    per-capture), so we compute it ourselves — but via **Orama's own tokenizer**
    (`db.tokenizer.tokenize(full, lang, "text")`, verified) so every term shown is the exact normalized
    form the index stores and is therefore copy-paste-searchable (recall normalizes the query the same
-   way). Rank by in-capture frequency, **optionally demoted by `index.tokenOccurrences` doc-frequency**
-   so terms common across *other* captures sink and distinctive tokens rise; drop stopwords, very
-   short, and purely-numeric tokens; take top ~12.
+   way). Rank by **distinctiveness, not repetition**: within-capture TF-IDF treating each line as a
+   document (`score = (1 + log tf) · log((lines+1)/(df+1))`), so tokens that recur on most lines —
+   path fragments, `pass`/`fail` status words — get near-zero IDF and sink, while tokens concentrated
+   in a few lines (error types, unique symbols, a failing spec's name) rise. A small extra demotion by
+   `index.tokenOccurrences` doc-frequency knocks down tokens common across *other* captures. Drop
+   stopwords, very short, purely-numeric, hex/hash, and mostly-digit tokens; take top ~12.
 
 Net: the footer is an index card — *what's notable* + *what's searchable* + *how to fetch* — which
 also directly addresses the stub-discoverability risk (§8): the model sees concrete terms to query,

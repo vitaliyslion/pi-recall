@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, type RecallConfig } from "../src/config.ts";
 import { RecallStore } from "../src/store.ts";
-import { computeTail, formatStub } from "../src/stub.ts";
-import { bigOutput, NEEDLE } from "./helpers/fixtures.ts";
+import { computeTail, formatStub, searchableTerms } from "../src/stub.ts";
+import { bigOutput, NEEDLE, testRunOutput } from "./helpers/fixtures.ts";
 
 // formatStub indexes via a real in-memory RecallStore (no disk) so its searchable terms come from
 // the same tokenizer the index uses — exactly the production flow (store.add then formatStub).
@@ -47,6 +47,25 @@ describe("formatStub", () => {
     const text = await stubFor("just\nsome\nplain\nlines\nhere", cfg);
     expect(text).not.toMatch(/Notable:/);
     expect(text).not.toMatch(/Searchable terms:/);
+  });
+});
+
+describe("searchableTerms", () => {
+  async function termsFor(full: string, want = DEFAULT_CONFIG.stubTerms) {
+    const store = new RecallStore(DEFAULT_CONFIG);
+    await store.add("exec:7f3a", full, "bash ./run-tests.sh");
+    return searchableTerms(store, full, want);
+  }
+
+  it("drops repetitive path/status boilerplate and surfaces distinctive tokens", async () => {
+    const { text, distinctive, boilerplate } = testRunOutput();
+    const terms = await termsFor(text);
+    for (const t of boilerplate) expect(terms).not.toContain(t);
+    for (const t of distinctive) expect(terms).toContain(t);
+  });
+
+  it("returns nothing when none are wanted", async () => {
+    expect(await termsFor(testRunOutput().text, 0)).toEqual([]);
   });
 });
 
