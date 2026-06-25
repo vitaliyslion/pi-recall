@@ -101,6 +101,31 @@
       td.cond-a { color: var(--a); }
       td.cond-c { color: var(--c); }
       .empty { color: var(--muted); padding: 40px; text-align: center; }
+      /* detail drill-down */
+      .muted { color: var(--muted); }
+      .pass { color: var(--good); }
+      .fail { color: var(--bad); }
+      td.task-link { color: var(--c); cursor: pointer; }
+      td.task-link:hover { text-decoration: underline; }
+      .drill { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+      .tasklist { display: flex; flex-direction: column; gap: 6px; }
+      .taskrow {
+        background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+        padding: 8px 10px; cursor: pointer; font-size: 12px; font-weight: 600; word-break: break-all;
+      }
+      .taskrow:hover { border-color: var(--c); }
+      .taskrow.sel { border-color: var(--c); }
+      .taskrow .sub { font-weight: 400; color: var(--muted); margin-top: 3px; font-size: 11px; }
+      .backbtn { margin-bottom: 12px; }
+      .needle { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+      .needle dl { margin: 0; }
+      .needle dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; margin-top: 10px; }
+      .needle dt:first-child { margin-top: 0; }
+      .needle dd { margin: 3px 0 0; }
+      .needle code, .mono code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .rawscroll { overflow-x: auto; }
+      td.answer { text-align: left; white-space: pre-wrap; word-break: break-word; max-width: 460px; min-width: 240px; color: var(--muted); }
     </style>
   </head>
   <body>
@@ -140,6 +165,7 @@
 
         <div class="card">
           <h3>Detail</h3>
+          <p class="hint">Focused run aggregates — click a task to drill into its needle and raw per-trial results.</p>
           <div id="detail"></div>
         </div>
       </main>
@@ -147,10 +173,12 @@
 
     <script>
       window.__RUNS__ = /*__DATA__*/[];
+      window.__TASKS__ = /*__TASKS__*/{};
     </script>
     <script>
       "use strict";
       const RUNS = (window.__RUNS__ || []).slice(); // ascending by time (generator sorts)
+      const TASKS = window.__TASKS__ || {}; // task id -> { prompt, expect, notes, fixtureCmd }
 
       // Metric catalog: how to pull, format, and scale each metric.
       const PCT = (x) => (x == null ? "–" : Math.round(x * 100) + "%");
@@ -196,6 +224,7 @@
         focused: RUNS.length ? RUNS.length - 1 : -1, // index of the by-task / detail run
         metric: "bashResultChars",
         task: "__all__",
+        detailTaskId: null, // null = aggregates table; set = drill into that task
       };
 
       // --- run list ---------------------------------------------------------------------------
@@ -376,10 +405,27 @@
         return '<div class="stat"><div class="k">' + esc(label) + '</div><div class="v ' + cls + '">' + esc(value) + "</div></div>";
       }
 
+      // Render task.expect ({all} tokens / {pattern} / {substring}) as a readable needle.
+      function fmtExpect(expect) {
+        if (!expect) return "—";
+        if (Array.isArray(expect.all))
+          return "all of " + expect.all.map((t) => "<code>" + esc(String(t)) + "</code>").join(" · ");
+        if (expect.pattern) return "regex <code>/" + esc(expect.pattern) + "/i</code>";
+        if (expect.substring) return "contains <code>" + esc(expect.substring) + "</code>";
+        return "—";
+      }
+      const mark = (b) =>
+        b == null ? '<span class="muted">–</span>' : b ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>';
+
       function renderDetail() {
         const el = document.getElementById("detail");
         if (state.focused < 0) { el.innerHTML = '<div class="empty">No run selected.</div>'; return; }
         const run = RUNS[state.focused];
+        if (state.detailTaskId == null) renderDetailTable(el, run);
+        else renderDetailDrill(el, run, state.detailTaskId);
+      }
+
+      function renderDetailTable(el, run) {
         const cols = METRICS;
         let html = "<table><thead><tr><th>task</th><th>cond</th><th>n</th>";
         for (const c of cols) html += "<th>" + esc(c.label) + "</th>";
@@ -388,13 +434,77 @@
           for (const cond of condsOf(run)) {
             const cell = cellOf(run, id, cond);
             if (!cell) continue;
-            html += "<tr><td>" + esc(id) + '</td><td class="cond-' + cond.toLowerCase() + '">' + esc(cond) + "</td><td>" + (cell.n ?? "–") + "</td>";
+            html += '<tr><td class="task-link" data-task="' + esc(id) + '">' + esc(id) + "</td>" +
+              '<td class="cond-' + cond.toLowerCase() + '">' + esc(cond) + "</td><td>" + (cell.n ?? "–") + "</td>";
             for (const c of cols) html += "<td>" + c.fmt(cell[c.key]) + "</td>";
             html += "</tr>";
           }
         }
         html += "</tbody></table>";
         el.innerHTML = html;
+        el.querySelectorAll(".task-link").forEach((td) =>
+          td.addEventListener("click", () => { state.detailTaskId = td.dataset.task; renderDetail(); })
+        );
+      }
+
+      function renderDetailDrill(el, run, taskId) {
+        // left: task list for the focused run (mirrors the runs panel)
+        let list = '<div class="tasklist">';
+        for (const id of tasksOf(run)) {
+          const accA = cellOf(run, id, "A")?.accuracyRate;
+          const accC = cellOf(run, id, "C")?.accuracyRate;
+          list += '<div class="taskrow' + (id === taskId ? " sel" : "") + '" data-task="' + esc(id) + '">' +
+            esc(id) + '<div class="sub">acc A ' + PCT(accA) + " · C " + PCT(accC) + "</div></div>";
+        }
+        list += "</div>";
+
+        // right: the needle (task definition) + raw per-trial results for this task in the focused run
+        const def = TASKS[taskId] || {};
+        let right = '<div class="taskdetail">';
+        right += '<button class="backbtn" id="detail-back">← all tasks</button>';
+        right += '<div class="needle"><dl>' +
+          "<dt>task</dt><dd class=\"mono\">" + esc(taskId) + "</dd>" +
+          (def.prompt ? "<dt>prompt</dt><dd>" + esc(def.prompt) + "</dd>" : "") +
+          "<dt>expected (needle)</dt><dd>" + fmtExpect(def.expect) + "</dd>" +
+          (def.notes ? "<dt>notes</dt><dd>" + esc(def.notes) + "</dd>" : "") +
+          (def.fixtureCmd ? "<dt>fixture</dt><dd class=\"mono\">" + esc(def.fixtureCmd) + "</dd>" : "") +
+          "</dl></div>";
+
+        const trials = (run.rawTrials || [])
+          .filter((t) => t.taskId === taskId)
+          .sort((a, b) => String(a.condition).localeCompare(String(b.condition)) || a.trial - b.trial);
+        if (!trials.length) {
+          right += '<div class="empty">No raw trials for this task in the focused run.</div>';
+        } else {
+          right += '<div class="rawscroll"><table><thead><tr>' +
+            "<th>trial</th><th>cond</th><th>acc</th><th>recall</th><th>bash</th><th>read</th><th>reread</th><th>capt</th>" +
+            "<th>bashChars</th><th>ctxTok</th><th>tokens</th><th>cost</th><th>answer</th></tr></thead><tbody>";
+          for (const t of trials) {
+            right += "<tr>" +
+              "<td>" + t.trial + "</td>" +
+              '<td class="cond-' + String(t.condition).toLowerCase() + '">' + esc(String(t.condition)) + "</td>" +
+              "<td>" + mark(t.accurate) + "</td>" +
+              "<td>" + (t.recallCalls ?? "–") + "</td>" +
+              "<td>" + (t.bashCalls ?? "–") + "</td>" +
+              "<td>" + (t.readCalls ?? "–") + "</td>" +
+              "<td>" + mark(t.rereadFullOutput) + "</td>" +
+              "<td>" + mark(t.captured) + "</td>" +
+              "<td>" + NUM(t.bashResultChars) + "</td>" +
+              "<td>" + NUM(t.contextTokens) + "</td>" +
+              "<td>" + NUM(t.tokensTotal) + "</td>" +
+              "<td>" + MONEY(t.cost) + "</td>" +
+              '<td class="answer">' + esc(t.finalAnswer || (t.error ? "ERROR: " + t.error : "")) + "</td>" +
+              "</tr>";
+          }
+          right += "</tbody></table></div>";
+        }
+        right += "</div>";
+
+        el.innerHTML = '<div class="drill">' + list + right + "</div>";
+        el.querySelector("#detail-back").addEventListener("click", () => { state.detailTaskId = null; renderDetail(); });
+        el.querySelectorAll(".taskrow").forEach((r) =>
+          r.addEventListener("click", () => { state.detailTaskId = r.dataset.task; renderDetail(); })
+        );
       }
 
       // --- render orchestration ---------------------------------------------------------------

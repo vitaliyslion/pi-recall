@@ -13,9 +13,11 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EVAL_ROOT = join(HERE, "..");
 const RESULTS_DIR = join(EVAL_ROOT, "results");
+const TASKS_DIR = join(EVAL_ROOT, "tasks");
 const TEMPLATE = join(EVAL_ROOT, "web", "template.html");
 const DEFAULT_OUT = join(EVAL_ROOT, "report.html");
 const DATA_TOKEN = "/*__DATA__*/[]";
+const TASKS_TOKEN = "/*__TASKS__*/{}";
 
 /** One run as the UI consumes it: parsed JSON plus file identity and a sortable timestamp. */
 interface Run {
@@ -59,6 +61,41 @@ async function loadRuns(): Promise<Run[]> {
   return runs.sort((a, b) => a.time.localeCompare(b.time));
 }
 
+/** Task definitions (the "needle"): prompt, expect, notes per task id — for the detail drill-down. */
+interface TaskDef {
+  prompt?: string;
+  expect?: unknown;
+  notes?: string;
+  fixtureCmd?: string;
+}
+
+async function loadTaskDefs(): Promise<Record<string, TaskDef>> {
+  const out: Record<string, TaskDef> = {};
+  let entries;
+  try {
+    entries = await readdir(TASKS_DIR, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    try {
+      const t = JSON.parse(
+        await readFile(join(TASKS_DIR, e.name, "task.json"), "utf8"),
+      ) as TaskDef;
+      out[e.name] = {
+        prompt: t.prompt,
+        expect: t.expect,
+        notes: t.notes,
+        fixtureCmd: t.fixtureCmd,
+      };
+    } catch {
+      /* skip unparseable task.json */
+    }
+  }
+  return out;
+}
+
 function parseOut(argv: string[]): string {
   const i = argv.indexOf("--out");
   return i >= 0 && argv[i + 1] ? argv[i + 1] : DEFAULT_OUT;
@@ -66,16 +103,20 @@ function parseOut(argv: string[]): string {
 
 async function main(): Promise<void> {
   const out = parseOut(process.argv.slice(2));
-  const runs = await loadRuns();
+  const [runs, taskDefs] = await Promise.all([loadRuns(), loadTaskDefs()]);
   if (!runs.length) {
     console.warn(`No result files in ${RESULTS_DIR} — generating an empty report.`);
   }
 
   const template = await readFile(TEMPLATE, "utf8");
-  if (!template.includes(DATA_TOKEN)) {
-    throw new Error(`template ${TEMPLATE} is missing the ${DATA_TOKEN} token`);
+  for (const tok of [DATA_TOKEN, TASKS_TOKEN]) {
+    if (!template.includes(tok)) {
+      throw new Error(`template ${TEMPLATE} is missing the ${tok} token`);
+    }
   }
-  const html = template.replace(DATA_TOKEN, JSON.stringify(runs));
+  const html = template
+    .replace(DATA_TOKEN, JSON.stringify(runs))
+    .replace(TASKS_TOKEN, JSON.stringify(taskDefs));
 
   await writeFile(out, html);
   console.log(`wrote ${out} (${runs.length} run${runs.length === 1 ? "" : "s"})`);
