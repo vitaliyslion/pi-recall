@@ -28,6 +28,17 @@ build step. Flags: `--tasks all|id,id`, `--conditions A,C`, `--trials N`, `--mod
 (default = Pi's settings), `--ext <path>` (pi-recall factory, default `../src/index.ts`),
 `--out <file>`. Raw per-trial JSON lands in `results/` (gitignored).
 
+## Visualize results
+
+```bash
+npm run viz                  # bakes results/*.json into report.html, then open it
+```
+
+`viz` reads every run in `results/` and writes a self-contained `report.html` (gitignored) with
+charts: a **trend across runs** (pick a range of runs to compare previous results) and an **A-vs-C
+by task** breakdown for a focused run, plus the `bashChars`/`ctxTok` reduction headline and a detail
+table. Re-run `npm run viz` after a new eval to pick it up.
+
 **Condition C is skipped** with a clear message until the pi-recall extension exists at `--ext`
 (default `../src/index.ts`). So A + the fixtures are useful immediately; C goes live the moment the
 extension is built. For C, the harness writes a fixed gate to `<cwd>/.pi/pi-recall.json`

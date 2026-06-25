@@ -1,4 +1,5 @@
 node_modules/
 results/
 mined/
+report.html
 package-lock.json

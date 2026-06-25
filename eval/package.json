@@ -7,6 +7,7 @@
   "scripts": {
     "run": "node src/run.ts",
     "mine": "node src/mine.ts",
+    "viz": "node src/viz.ts",
     "check": "tsgo --noEmit -p tsconfig.json"
   },
   "dependencies": {

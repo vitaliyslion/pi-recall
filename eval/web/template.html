@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>pi-recall eval — results</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel2: #1e222b;
+        --line: #2a2f3a;
+        --fg: #e6e8ec;
+        --muted: #98a0ad;
+        --a: #f5a623; /* condition A — native Pi */
+        --c: #4aa3ff; /* condition C — pi-recall */
+        --good: #43d17a;
+        --bad: #ff6b6b;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        overflow: hidden;
+      }
+      .layout { display: grid; grid-template-columns: 320px 1fr; height: 100vh; }
+      aside {
+        border-right: 1px solid var(--line);
+        padding: 14px;
+        height: 100vh;
+        overflow: auto;
+      }
+      main { padding: 18px 20px; height: 100vh; overflow: auto; }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+      .runlist { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+      .run {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+        cursor: pointer;
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .run.focused { border-color: var(--c); }
+      .run input { margin-top: 3px; }
+      .run .meta { min-width: 0; }
+      .run .name { font-weight: 600; font-size: 12px; word-break: break-all; }
+      .run .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+      .chip {
+        font-size: 10px;
+        color: var(--muted);
+        background: var(--panel2);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 1px 7px;
+      }
+      .quick { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+      button, select {
+        background: var(--panel2);
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 5px 9px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--c); }
+      .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+      .controls label { color: var(--muted); font-size: 12px; margin-right: 6px; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+      }
+      .card h3 { margin: 0 0 4px; font-size: 14px; }
+      .card .hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+      .chart-wrap { position: relative; height: 320px; }
+      .summary { display: flex; flex-wrap: wrap; gap: 14px; }
+      .stat {
+        flex: 1 1 160px;
+        background: var(--panel2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .stat .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+      .stat .v { font-size: 20px; font-weight: 700; margin-top: 2px; }
+      .stat .v.good { color: var(--good); }
+      .stat .v.bad { color: var(--bad); }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      th:first-child, td:first-child { text-align: left; }
+      td.cond-a { color: var(--a); }
+      td.cond-c { color: var(--c); }
+      .empty { color: var(--muted); padding: 40px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside>
+        <h2>Runs</h2>
+        <div class="quick">
+          <button data-sel="all">All</button>
+          <button data-sel="last5">Last 5</button>
+          <button data-sel="none">None</button>
+        </div>
+        <div class="runlist" id="runlist"></div>
+      </aside>
+
+      <main id="main">
+        <div class="controls">
+          <div><label>Metric</label><select id="metric"></select></div>
+          <div><label>Task</label><select id="task"></select></div>
+        </div>
+
+        <div class="card">
+          <h3>Trend across runs</h3>
+          <p class="hint">Selected runs in chronological order, one line per condition. Use the run list to pick the range.</p>
+          <div class="chart-wrap"><canvas id="trend"></canvas></div>
+        </div>
+
+        <div class="card">
+          <h3>A vs C by task</h3>
+          <p class="hint">Focused run (last one clicked, outlined in the list): grouped bars per task.</p>
+          <div class="chart-wrap"><canvas id="bytask"></canvas></div>
+        </div>
+
+        <div class="card">
+          <h3 id="summary-title">Headline</h3>
+          <div class="summary" id="summary"></div>
+        </div>
+
+        <div class="card">
+          <h3>Detail</h3>
+          <div id="detail"></div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      window.__RUNS__ = /*__DATA__*/[];
+    </script>
+    <script>
+      "use strict";
+      const RUNS = (window.__RUNS__ || []).slice(); // ascending by time (generator sorts)
+
+      // Metric catalog: how to pull, format, and scale each metric.
+      const PCT = (x) => (x == null ? "–" : Math.round(x * 100) + "%");
+      const NUM = (x) => (x == null ? "–" : Math.round(x).toLocaleString("en-US"));
+      const MONEY = (x) => (x == null ? "–" : "$" + Number(x).toFixed(4));
+      const METRICS = [
+        { key: "bashResultChars", label: "Bash chars into context", fmt: NUM, lowerBetter: true },
+        { key: "contextTokens", label: "Context tokens", fmt: NUM, lowerBetter: true },
+        { key: "tokensTotal", label: "Total tokens", fmt: NUM, lowerBetter: true },
+        { key: "accuracyRate", label: "Accuracy", fmt: PCT, pct: true, lowerBetter: false },
+        { key: "recallRate", label: "Recall rate", fmt: PCT, pct: true, lowerBetter: false },
+        { key: "rerunRate", label: "Rerun rate", fmt: PCT, pct: true, lowerBetter: true },
+        { key: "rereadRate", label: "Reread rate", fmt: PCT, pct: true, lowerBetter: true },
+        { key: "captureRate", label: "Capture rate", fmt: PCT, pct: true, lowerBetter: false },
+        { key: "cost", label: "Cost (USD)", fmt: MONEY, lowerBetter: true },
+      ];
+      const COND_COLOR = { A: "#f5a623", C: "#4aa3ff" };
+      const condColor = (c) => COND_COLOR[c] || "#9aa0ad";
+
+      // --- helpers over a run's aggregated results --------------------------------------------
+      const tasksOf = (run) => Object.keys(run.results || {}).sort();
+      const condsOf = (run) => {
+        const s = new Set();
+        for (const t of Object.values(run.results || {})) for (const c of Object.keys(t)) s.add(c);
+        return [...s].sort();
+      };
+      const cellOf = (run, taskId, cond) => (run.results?.[taskId]?.[cond]) || null;
+      // Mean of a metric over tasks (or one task) for a condition; null when no data present.
+      function metricValue(run, cond, metricKey, taskId) {
+        const ids = taskId === "__all__" ? tasksOf(run) : [taskId];
+        const xs = [];
+        for (const id of ids) {
+          const cell = cellOf(run, id, cond);
+          const v = cell ? cell[metricKey] : null;
+          if (typeof v === "number") xs.push(v);
+        }
+        return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+      }
+
+      // --- state ------------------------------------------------------------------------------
+      const state = {
+        selected: new Set(RUNS.map((_, i) => i)), // indices of runs in the trend range
+        focused: RUNS.length ? RUNS.length - 1 : -1, // index of the by-task / detail run
+        metric: "bashResultChars",
+        task: "__all__",
+      };
+
+      // --- run list ---------------------------------------------------------------------------
+      const runlistEl = document.getElementById("runlist");
+      function renderRunList() {
+        if (!RUNS.length) {
+          runlistEl.innerHTML = '<div class="empty">No runs found.</div>';
+          return;
+        }
+        runlistEl.innerHTML = "";
+        // newest first in the list
+        for (let i = RUNS.length - 1; i >= 0; i--) {
+          const run = RUNS[i];
+          const a = run.args || {};
+          const conds = condsOf(run);
+          const nTasks = tasksOf(run).length;
+          const when = new Date(run.time).toLocaleString();
+          const row = document.createElement("div");
+          row.className = "run" + (i === state.focused ? " focused" : "");
+          row.innerHTML =
+            '<input type="checkbox" ' + (state.selected.has(i) ? "checked" : "") + ' />' +
+            '<div class="meta">' +
+            '<div class="name">' + esc(run.label) + "</div>" +
+            '<div class="chips">' +
+            chip(when) +
+            chip((a.model || "settings default")) +
+            chip(nTasks + " task" + (nTasks === 1 ? "" : "s")) +
+            chip((a.trials != null ? a.trials : "?") + " trials") +
+            chip(conds.join("/") || "—") +
+            "</div></div>";
+          const cb = row.querySelector("input");
+          cb.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (cb.checked) state.selected.add(i); else state.selected.delete(i);
+            renderTrend();
+          });
+          row.addEventListener("click", () => { state.focused = i; renderAll(); });
+          runlistEl.appendChild(row);
+        }
+      }
+      const chip = (t) => '<span class="chip">' + esc(String(t)) + "</span>";
+      function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+      document.querySelectorAll(".quick button").forEach((b) =>
+        b.addEventListener("click", () => {
+          const mode = b.dataset.sel;
+          state.selected = new Set(
+            mode === "all" ? RUNS.map((_, i) => i)
+            : mode === "last5" ? RUNS.map((_, i) => i).slice(-5)
+            : []
+          );
+          renderRunList();
+          renderTrend();
+        })
+      );
+
+      // --- controls ---------------------------------------------------------------------------
+      const metricEl = document.getElementById("metric");
+      const taskEl = document.getElementById("task");
+      for (const m of METRICS) metricEl.add(new Option(m.label, m.key));
+      metricEl.value = state.metric;
+      metricEl.addEventListener("change", () => { state.metric = metricEl.value; renderAll(); });
+      taskEl.addEventListener("change", () => { state.task = taskEl.value; renderAll(); });
+      function renderTaskOptions() {
+        const cur = state.task;
+        const ids = new Set();
+        for (const r of RUNS) for (const t of tasksOf(r)) ids.add(t);
+        taskEl.innerHTML = "";
+        taskEl.add(new Option("All tasks (mean)", "__all__"));
+        for (const id of [...ids].sort()) taskEl.add(new Option(id, id));
+        taskEl.value = [...ids].includes(cur) || cur === "__all__" ? cur : "__all__";
+        state.task = taskEl.value;
+      }
+
+      const metricMeta = () => METRICS.find((m) => m.key === state.metric);
+
+      // --- charts -----------------------------------------------------------------------------
+      const commonScales = (pct) => ({
+        x: { ticks: { color: "#98a0ad" }, grid: { color: "#23272f" } },
+        y: {
+          beginAtZero: true,
+          max: pct ? 1 : undefined,
+          ticks: {
+            color: "#98a0ad",
+            callback: (v) => (pct ? Math.round(v * 100) + "%" : Number(v).toLocaleString("en-US")),
+          },
+          grid: { color: "#23272f" },
+        },
+      });
+      const legendOpts = { labels: { color: "#e6e8ec" } };
+
+      let trendChart, bytaskChart;
+      function renderTrend() {
+        const m = metricMeta();
+        const idx = RUNS.map((_, i) => i).filter((i) => state.selected.has(i)); // ascending
+        const labels = idx.map((i) => RUNS[i].label.replace(/T.*/, (s) => s.slice(0, 9))); // shorten ISO
+        const conds = ["A", "C"]; // fixed order; extra conds appended below
+        for (const r of idx) for (const c of condsOf(RUNS[r])) if (!conds.includes(c)) conds.push(c);
+        const datasets = conds.map((c) => ({
+          label: "Cond " + c,
+          data: idx.map((i) => metricValue(RUNS[i], c, m.key, state.task)),
+          borderColor: condColor(c),
+          backgroundColor: condColor(c),
+          spanGaps: true,
+          tension: 0.2,
+        }));
+        const ctx = document.getElementById("trend");
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: legendOpts, title: { display: false } },
+            scales: commonScales(m.pct),
+          },
+        });
+      }
+
+      function renderByTask() {
+        const m = metricMeta();
+        const ctx = document.getElementById("bytask");
+        if (bytaskChart) bytaskChart.destroy();
+        if (state.focused < 0) return;
+        const run = RUNS[state.focused];
+        const ids = tasksOf(run);
+        const conds = condsOf(run);
+        const datasets = conds.map((c) => ({
+          label: "Cond " + c,
+          data: ids.map((id) => (cellOf(run, id, c)?.[m.key] ?? null)),
+          backgroundColor: condColor(c),
+        }));
+        bytaskChart = new Chart(ctx, {
+          type: "bar",
+          data: { labels: ids, datasets },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: legendOpts },
+            scales: commonScales(m.pct),
+          },
+        });
+      }
+
+      // --- summary + detail -------------------------------------------------------------------
+      function reduction(run, metricKey) {
+        const A = metricValue(run, "A", metricKey, "__all__");
+        const C = metricValue(run, "C", metricKey, "__all__");
+        if (A == null || C == null || A === 0) return null;
+        return 1 - C / A; // positive = C lower
+      }
+      function renderSummary() {
+        const el = document.getElementById("summary");
+        const titleEl = document.getElementById("summary-title");
+        if (state.focused < 0) { el.innerHTML = ""; titleEl.textContent = "Headline"; return; }
+        const run = RUNS[state.focused];
+        titleEl.textContent = "Headline — " + run.label;
+        const accA = metricValue(run, "A", "accuracyRate", "__all__");
+        const accC = metricValue(run, "C", "accuracyRate", "__all__");
+        const recC = metricValue(run, "C", "recallRate", "__all__");
+        const stats = [
+          deltaStat("Bash chars into context", reduction(run, "bashResultChars")),
+          deltaStat("Context tokens", reduction(run, "contextTokens")),
+          deltaStat("Total tokens", reduction(run, "tokensTotal")),
+          plainStat("Accuracy A → C", PCT(accA) + " → " + PCT(accC), accC != null && accA != null && accC >= accA),
+          plainStat("Recall rate (C)", PCT(recC), recC != null && recC > 0),
+        ];
+        el.innerHTML = stats.join("");
+      }
+      function deltaStat(label, frac) {
+        if (frac == null) return plainStat(label, "–", null);
+        const lower = frac >= 0;
+        const cls = lower ? "good" : "bad";
+        const txt = Math.abs(Math.round(frac * 100)) + "% " + (lower ? "lower" : "higher") + " under C";
+        return '<div class="stat"><div class="k">' + esc(label) + '</div><div class="v ' + cls + '">' + txt + "</div></div>";
+      }
+      function plainStat(label, value, good) {
+        const cls = good == null ? "" : good ? "good" : "bad";
+        return '<div class="stat"><div class="k">' + esc(label) + '</div><div class="v ' + cls + '">' + esc(value) + "</div></div>";
+      }
+
+      function renderDetail() {
+        const el = document.getElementById("detail");
+        if (state.focused < 0) { el.innerHTML = '<div class="empty">No run selected.</div>'; return; }
+        const run = RUNS[state.focused];
+        const cols = METRICS;
+        let html = "<table><thead><tr><th>task</th><th>cond</th><th>n</th>";
+        for (const c of cols) html += "<th>" + esc(c.label) + "</th>";
+        html += "</tr></thead><tbody>";
+        for (const id of tasksOf(run)) {
+          for (const cond of condsOf(run)) {
+            const cell = cellOf(run, id, cond);
+            if (!cell) continue;
+            html += "<tr><td>" + esc(id) + '</td><td class="cond-' + cond.toLowerCase() + '">' + esc(cond) + "</td><td>" + (cell.n ?? "–") + "</td>";
+            for (const c of cols) html += "<td>" + c.fmt(cell[c.key]) + "</td>";
+            html += "</tr>";
+          }
+        }
+        html += "</tbody></table>";
+        el.innerHTML = html;
+      }
+
+      // --- render orchestration ---------------------------------------------------------------
+      function renderAll() {
+        renderRunList();
+        renderTrend();
+        renderByTask();
+        renderSummary();
+        renderDetail();
+      }
+
+      if (!RUNS.length) {
+        document.getElementById("main").innerHTML =
+          '<div class="empty">No result files found. Run an eval (<code>node src/run.ts</code>) then regenerate with <code>npm run viz</code>.</div>';
+      } else {
+        renderTaskOptions();
+        renderAll();
+      }
+    </script>
+  </body>
+</html>
