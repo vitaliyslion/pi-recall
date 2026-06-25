@@ -1,7 +1,7 @@
 // Post-run metric extraction. Source of truth is session.messages (deterministic, model-agnostic
 // to parse); token totals come from getSessionStats(). Maps to SPEC §7's three metric families:
 //   1. tokens-into-context  -> bashResultChars (chars of the bash result that entered context) + tokens
-//   2. answer accuracy      -> finalAnswer vs task.expect (programmatic regex/substring)
+//   2. answer accuracy      -> finalAnswer vs task.expect (order-independent tokens / regex / substring)
 //   3. recall behavior      -> recallCalls / bashCalls (reruns) / rereadFullOutput
 //
 // AgentMessage shapes (from @earendil-works/pi-ai):
@@ -28,8 +28,14 @@ export interface EvalMessage {
   toolName?: string;
 }
 
-/** task.json's `expect`: a regex `pattern` or a case-insensitive `substring`. */
+/**
+ * task.json's `expect`. Prefer `all`: an order-independent list of case-insensitive substrings
+ * the answer must ALL contain (robust to the model's paraphrasing/separators — `expected 19.99,
+ * got 20.00` vs `expected 19.99 actual 20.00`). `pattern` (regex) / `substring` remain for cases
+ * that need them. Precedence: `all` > `pattern` > `substring`.
+ */
 export interface ExpectSpec {
+  all?: string[];
   pattern?: string;
   substring?: string;
 }
@@ -110,16 +116,20 @@ export function analyzeMessages(
   };
 }
 
-/** Programmatic accuracy check against task.expect ({pattern} regex or {substring}). */
+/** Programmatic accuracy check against task.expect ({all} tokens, {pattern} regex, or {substring}). */
 export function checkAccuracy(
   answer: string | undefined,
   expect: ExpectSpec | undefined,
 ): boolean | null {
   if (!expect) return null;
   const a = answer ?? "";
-  if (expect.pattern) return new RegExp(expect.pattern, "i").test(a);
-  if (expect.substring) {
-    return a.toLowerCase().includes(String(expect.substring).toLowerCase());
+  const lower = a.toLowerCase();
+  if (expect.all) {
+    return expect.all.length
+      ? expect.all.every((tok) => lower.includes(String(tok).toLowerCase()))
+      : null;
   }
+  if (expect.pattern) return new RegExp(expect.pattern, "i").test(a);
+  if (expect.substring) return lower.includes(String(expect.substring).toLowerCase());
   return null;
 }

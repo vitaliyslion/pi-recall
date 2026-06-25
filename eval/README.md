@@ -61,7 +61,7 @@ Two non-obvious facts about driving Pi via `createAgentSession` (both handled in
 
 | Column | Meaning | §7 family |
 |--------|---------|-----------|
-| `acc` | final answer matches `task.expect.pattern` (programmatic) | probe accuracy |
+| `acc` | final answer satisfies `task.expect` — order-independent `all` tokens (preferred), or `pattern`/`substring` (programmatic) | probe accuracy |
 | `bashChars` | chars of the bash result that entered context (stub vs. full output) | tokens-into-context |
 | `ctxTok` | final context tokens (`getContextUsage`) | tokens-into-context |
 | `recall` | fraction of trials that called the `recall` tool (C) | recall behavior |

@@ -2,6 +2,6 @@
   "id": "midsize-band",
   "prompt": "Run this command exactly: `bash fixture.sh`. Using only its output, tell me the computed value of MAGENTA_THRESHOLD. Answer in one line.",
   "fixtureCmd": "bash fixture.sh",
-  "expect": { "pattern": "MAGENTA_THRESHOLD computed as 0.834" },
+  "expect": { "all": ["0.834"] },
   "notes": "5-50 KB band: Pi does NOT truncate (A keeps full output, full tokens); C captures + stubs (lower tokens, must recall). Exercises SPEC §5.1 second capture path."
 }

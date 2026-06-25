@@ -2,6 +2,6 @@
   "id": "build-warning-buried",
   "prompt": "Run this command exactly: `bash fixture.sh`. Then, using only its output, tell me the exact ERROR message and its error code that the build logged. Answer in one line.",
   "fixtureCmd": "bash fixture.sh",
-  "expect": { "pattern": "ZEBRACORN eviction policy mismatch.*E4471" },
+  "expect": { "all": ["ZEBRACORN eviction policy mismatch", "E4471"] },
   "notes": "Answer at line 300/3000 (~150 KB). In the head Pi drops on tail-truncation; A must re-read fullOutputPath, C can recall."
 }
