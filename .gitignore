@@ -3,3 +3,5 @@ node_modules/
 .DS_Store
 /tmp/
 .claude
+.pi/extensions/gortex
+.pi/extensions/pi-recall

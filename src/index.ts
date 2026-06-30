@@ -18,6 +18,7 @@ import type {
 import { readFile } from "node:fs/promises";
 import { Type } from "typebox";
 import { DEFAULT_CONFIG, loadConfig, overGate } from "./config.ts";
+import { estimateTokens, footerStatus } from "./footer.ts";
 import { RecallStore } from "./store.ts";
 import { computeTail, formatStub } from "./stub.ts";
 
@@ -75,6 +76,11 @@ export default function piRecall(pi: ExtensionAPI): void {
   let store = new RecallStore(cfg);
   let active = false; // effective enabled = config.enabled && !--recall-off
 
+  // Single source of truth for the footer string (formatting lives in footer.ts), so session_start
+  // and the live per-capture update can't drift.
+  const recallStatusText = (): string =>
+    footerStatus({ active, savedTokens: store.savedTokens });
+
   pi.registerFlag("recall-off", {
     description:
       "Disable pi-recall capture; pass all bash output through untouched",
@@ -90,10 +96,7 @@ export default function piRecall(pi: ExtensionAPI): void {
 
     store = new RecallStore(cfg);
     if (!active) {
-      ctx.ui.setStatus(
-        "pi-recall",
-        off ? "pi-recall: off (--recall-off)" : "pi-recall: off",
-      );
+      ctx.ui.setStatus("pi-recall", recallStatusText());
       return;
     }
 
@@ -114,10 +117,7 @@ export default function piRecall(pi: ExtensionAPI): void {
         "warning",
       );
     }
-    ctx.ui.setStatus(
-      "pi-recall",
-      `pi-recall: on (>${cfg.maxLines}ln/${Math.round(cfg.maxBytes / 1024)}KB)`,
-    );
+    ctx.ui.setStatus("pi-recall", recallStatusText());
   });
 
   pi.on("session_shutdown", async () => {
@@ -130,7 +130,7 @@ export default function piRecall(pi: ExtensionAPI): void {
   });
 
   // ── the capture hook: gate + index + stub (§5.1) ──────────────────────────────────────────────
-  pi.on("tool_result", async (event) => {
+  pi.on("tool_result", async (event, ctx) => {
     if (!active) return; // pass through untouched
     if (!isBashToolResult(event)) return; // scope: bash only (type-guarded)
 
@@ -173,6 +173,14 @@ export default function piRecall(pi: ExtensionAPI): void {
     const tail = computeTail(full, cfg.tailLines);
     const totalLines = countLines(full);
     const text = formatStub({ full, source, tail, totalLines, store, cfg });
+
+    // Net tokens kept out of context = full output minus the stub that replaces it. Update the footer
+    // live; the accumulated total is flushed to disk by session_shutdown → store.persist().
+    store.savedTokens += Math.max(
+      0,
+      estimateTokens(full) - estimateTokens(text),
+    );
+    ctx.ui.setStatus("pi-recall", recallStatusText());
 
     return { content: [{ type: "text", text }] };
   });
@@ -273,6 +281,7 @@ export default function piRecall(pi: ExtensionAPI): void {
         `  stub:           ${cfg.stubTerms} terms, ${cfg.stubHighlights} highlights`,
         "",
         `  captures:       ${store.captureCount}`,
+        `  tokens saved:   ${store.savedTokens}`,
         `  indexed chunks: ${docs}`,
         `  snapshot size:  ${snap == null ? "(none)" : `${snap} bytes`}`,
       ];

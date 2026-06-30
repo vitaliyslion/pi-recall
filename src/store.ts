@@ -13,7 +13,14 @@ import {
 } from "@orama/plugin-data-persistence/server";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, rm, stat } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { PersistFormat, RecallConfig } from "./config.ts";
@@ -41,6 +48,12 @@ function snapshotPath(sessionId: string, format: PersistFormat): string {
   return join(dataDir(), `${sessionId}.${ext}`);
 }
 
+/** Sidecar holding per-session metadata — kept separate from the index snapshot so a
+ *  corrupt/empty index never blocks reading the count, and vice-versa. */
+function metaPath(sessionId: string): string {
+  return join(dataDir(), `${sessionId}.meta.json`);
+}
+
 export class RecallStore {
   cfg: RecallConfig;
   db: AnyOrama;
@@ -48,6 +61,8 @@ export class RecallStore {
   /** command text per source, for stubs/recall hits (§5.3). */
   commands: Map<string, string>;
   captureCount: number;
+  /** Running estimate of model-context tokens kept out of context by stubbing (persisted, §footer). */
+  savedTokens: number;
 
   constructor(cfg: RecallConfig) {
     this.cfg = cfg;
@@ -55,12 +70,22 @@ export class RecallStore {
     this.sessionId = undefined;
     this.commands = new Map();
     this.captureCount = 0;
+    this.savedTokens = 0;
   }
 
   /** Bind to a session and restore its snapshot from disk if one exists (§5.2 lifecycle). */
   async restore(sessionId: string): Promise<boolean> {
     this.sessionId = sessionId;
     if (!this.cfg.persist) return false;
+    // Restore the savings counter independently of the index, so the footer's total survives even
+    // when the index snapshot is absent/corrupt. Best-effort: any read/parse error leaves it 0.
+    try {
+      const meta = JSON.parse(await readFile(metaPath(sessionId), "utf8"));
+      if (typeof meta?.savedTokens === "number")
+        this.savedTokens = meta.savedTokens;
+    } catch {
+      // no sidecar / unreadable — keep the constructor's 0
+    }
     const path = snapshotPath(sessionId, this.cfg.persistFormat);
     if (!existsSync(path)) return false;
     try {
@@ -156,6 +181,11 @@ export class RecallStore {
     await mkdir(dataDir(), { recursive: true });
     const path = snapshotPath(this.sessionId, this.cfg.persistFormat);
     await persistToFile(this.db, this.cfg.persistFormat, path);
+    // Sidecar: the running savings total, so /resume restores it (the Orama snapshot can't carry it).
+    await writeFile(
+      metaPath(this.sessionId),
+      JSON.stringify({ savedTokens: this.savedTokens }),
+    );
     return path;
   }
 

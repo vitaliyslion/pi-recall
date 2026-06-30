@@ -74,6 +74,18 @@ describe("RecallStore", () => {
     );
   });
 
+  it("persists the savedTokens counter and restores it into a fresh store", async () => {
+    const a = new RecallStore(DEFAULT_CONFIG);
+    await a.restore("sess-tok"); // no sidecar yet → counter stays 0
+    expect(a.savedTokens).toBe(0);
+    a.savedTokens += 4096;
+    await a.persist();
+
+    const b = new RecallStore(DEFAULT_CONFIG);
+    await b.restore("sess-tok");
+    expect(b.savedTokens).toBe(4096);
+  });
+
   it("mints a 5-char git-style source id decoupled from the long provider id", () => {
     const store = new RecallStore(DEFAULT_CONFIG);
     const src = store.shortSource("toolu_01AbcdefghijklmnopqrstuV");
