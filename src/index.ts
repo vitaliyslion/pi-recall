@@ -211,11 +211,13 @@ export default function piRecall(pi: ExtensionAPI): void {
       ),
       limit: Type.Optional(Type.Number({ description: "Max hits to return." })),
     }),
-    async execute(_toolCallId, { query, source, limit }) {
+    async execute(_toolCallId, args, _signal, _onUpdate, ctx) {
+      const { query, source, limit } = args;
       // Identical output can recur verbatim across a capture (e.g. a repeated log line chunked into
       // several hits) — rendering each separately pollutes the result with duplicate blocks. Orama's
       // groupBy collapses same-(source, text) hits and, because it groups over the full match set, the
       // duplicates never consume the `limit` budget that bounds distinct blocks below.
+      ctx.ui.notify(`Recall query: "${query}"`, "info");
       const r = await store.search(query, source, undefined, true);
       const groups = r.groups ?? [];
       if (!groups.length) {
